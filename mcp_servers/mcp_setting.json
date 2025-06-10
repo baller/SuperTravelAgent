@@ -25,6 +25,15 @@
             },
             "disabled": false,
             "description": "百度地图MCP服务器，提供地理编码、逆地理编码、地点检索、路线规划等10个地图相关API接口"
+        },
+        "12306-mcp": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "12306-mcp"
+            ],
+            "disabled": false,
+            "description": "12306火车票查询MCP服务器，提供火车票搜索、列车信息过滤、过站查询、中转查询等功能"
         }
     
     }

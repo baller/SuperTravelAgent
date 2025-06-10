@@ -89,6 +89,8 @@ const MCPServersPanel: React.FC = () => {
   const renderServerIcon = (server: MCPServer) => {
     if (server.name === 'baidu-map') {
       return '🗺️';
+    } else if (server.name === '12306-mcp') {
+      return '🚄';
     } else if (server.name === 'fetch') {
       return '🌐';
     } else if (server.name.includes('search')) {
@@ -254,6 +256,22 @@ const MCPServersPanel: React.FC = () => {
                     </div>
                   }
                   type="success"
+                  showIcon
+                />
+              )}
+
+              {server.name === '12306-mcp' && (
+                <Alert
+                  message="12306火车票查询服务"
+                  description={
+                    <div>
+                      <div>• 查询12306购票信息</div>
+                      <div>• 过滤列车信息</div>
+                      <div>• 过站查询</div>
+                      <div>• 中转查询</div>
+                    </div>
+                  }
+                  type="warning"
                   showIcon
                 />
               )}

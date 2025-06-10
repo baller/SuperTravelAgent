@@ -438,8 +438,15 @@ async def get_mcp_servers(response: Response):
                 if tool_manager:
                     # 统计来自此服务器的工具数量
                     all_tools = tool_manager.list_tools()
-                    server_tools = [tool for tool in all_tools 
-                                  if tool.get("name", "").startswith(f"map_") and server_name == "baidu-map"]
+                    server_tools = []
+                    if server_name == "baidu-map":
+                        server_tools = [tool for tool in all_tools 
+                                      if tool.get("name", "").startswith("map_")]
+                    elif server_name == "12306-mcp":
+                        server_tools = [tool for tool in all_tools 
+                                      if tool.get("name", "").startswith("12306_") or 
+                                         "12306" in tool.get("name", "").lower() or
+                                         "train" in tool.get("name", "").lower()]
                     server_info["tools_count"] = len(server_tools)
                 
                 mcp_servers.append(server_info)

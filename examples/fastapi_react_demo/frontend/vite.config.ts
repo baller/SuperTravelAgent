@@ -8,9 +8,9 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 8080,
     proxy: {
-      '/api': 'http://backend:8000',
+      '/api': 'http://0.0.0.0:8000',
       '/ws': {
-        target: 'ws://backend:8000',
+        target: 'ws://0.0.0.0:8000',
         ws: true,
       }
     }

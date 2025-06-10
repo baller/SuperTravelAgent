@@ -1,3 +1,4 @@
+examples/fastapi_react_demo/frontend/node_modules
 mcp_servers/run_all_mcp_server.sh
 mcp_server/hub/*
 mcp_servers/standard_search/*

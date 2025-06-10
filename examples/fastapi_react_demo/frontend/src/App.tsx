@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-route
 import ChatInterface from './components/ChatInterface';
 import SystemConfig from './components/SystemConfig';
 import ToolsPanel from './components/ToolsPanel';
+import MCPServersPanel from './components/MCPServersPanel';
 import Sidebar from './components/Sidebar';
 import { SystemProvider } from './context/SystemContext';
 import { ChatHistoryItem } from './hooks/useChatHistory';
@@ -126,6 +127,7 @@ const AppContent: React.FC = () => {
                   />
                   <Route path="/config" element={<SystemConfig />} />
                   <Route path="/tools" element={<ToolsPanel />} />
+                  <Route path="/mcp-servers" element={<MCPServersPanel />} />
                 </Routes>
               </Content>
             </Layout>

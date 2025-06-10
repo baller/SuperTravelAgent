@@ -183,6 +183,38 @@ async def initialize_system():
         tool_manager = ToolManager(is_auto_discover=False)
         # 手动进行自动发现本地工具
         tool_manager._auto_discover_tools()
+        
+        # 注册MCP服务器（如果配置了的话）
+        if app_config.mcp and app_config.mcp.servers:
+            print("🔧 初始化MCP服务器...")
+            for server_name, server_config in app_config.mcp.servers.items():
+                if not server_config.disabled:
+                    try:
+                        # 构建配置字典
+                        mcp_config = {}
+                        if server_config.command:
+                            mcp_config['command'] = server_config.command
+                            if server_config.args:
+                                mcp_config['args'] = server_config.args
+                        elif server_config.sse_url:
+                            mcp_config['sse_url'] = server_config.sse_url
+                        
+                        if server_config.env:
+                            mcp_config['env'] = server_config.env
+                        
+                        success = await tool_manager.register_mcp_server(server_name, mcp_config)
+                        if success:
+                            print(f"✅ MCP服务器 {server_name} 注册成功")
+                            if server_config.description:
+                                print(f"   描述: {server_config.description}")
+                        else:
+                            print(f"❌ MCP服务器 {server_name} 注册失败")
+                    except Exception as e:
+                        print(f"❌ MCP服务器 {server_name} 注册异常: {str(e)}")
+                        logger.error(f"MCP服务器注册失败: {e}")
+                else:
+                    print(f"⏸️ MCP服务器 {server_name} 已禁用")
+        
         logger.info("工具管理器初始化完成")
         
         # 优先使用配置文件中的模型配置
@@ -375,6 +407,52 @@ async def get_tools(response: Response):
     except Exception as e:
         logger.error(f"获取工具列表失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/mcp-servers")
+async def get_mcp_servers(response: Response):
+    """获取MCP服务器状态"""
+    add_cors_headers(response)
+    try:
+        app_config = get_app_config()
+        mcp_servers = []
+        
+        if app_config.mcp and app_config.mcp.servers:
+            for server_name, server_config in app_config.mcp.servers.items():
+                server_info = {
+                    "name": server_name,
+                    "disabled": server_config.disabled,
+                    "description": server_config.description,
+                    "type": "sse" if server_config.sse_url else "stdio",
+                    "config": {},
+                    "tools_count": 0
+                }
+                
+                if server_config.command:
+                    server_info["config"]["command"] = server_config.command
+                    server_info["config"]["args"] = server_config.args
+                elif server_config.sse_url:
+                    server_info["config"]["sse_url"] = server_config.sse_url
+                
+                # 检查工具管理器中是否有相关工具
+                if tool_manager:
+                    # 统计来自此服务器的工具数量
+                    all_tools = tool_manager.list_tools()
+                    server_tools = [tool for tool in all_tools 
+                                  if tool.get("name", "").startswith(f"map_") and server_name == "baidu-map"]
+                    server_info["tools_count"] = len(server_tools)
+                
+                mcp_servers.append(server_info)
+        
+        return {
+            "servers": mcp_servers,
+            "total_servers": len(mcp_servers),
+            "active_servers": len([s for s in mcp_servers if not s["disabled"]])
+        }
+    
+    except Exception as e:
+        logger.error(f"获取MCP服务器状态失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取MCP服务器状态失败: {str(e)}")
 
 
 @app.post("/api/chat")

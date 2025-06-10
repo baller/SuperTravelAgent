@@ -11,7 +11,8 @@ import {
   MoreOutlined,
   ExclamationCircleOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  CloudServerOutlined
 } from '@ant-design/icons';
 import { useChatHistory, ChatHistoryItem } from '../hooks/useChatHistory';
 
@@ -47,6 +48,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onChatSelect, onNewChat, o
       key: '/tools',
       icon: <ToolOutlined />,
       label: '工具管理',
+    },
+    {
+      key: '/mcp-servers',
+      icon: <CloudServerOutlined />,
+      label: 'MCP服务器',
     },
     {
       key: '/config',

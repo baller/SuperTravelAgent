@@ -384,7 +384,38 @@ class ToolManager:
         try:
             # Step 2: Execute based on tool type
             if isinstance(tool, McpToolSpec):
-                final_result = self._execute_mcp_tool(tool, session_id, **kwargs)
+                # For MCP tools, we need to handle async execution properly
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # If we're in an async context (like FastAPI), create a task
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self._run_mcp_tool_async(tool, session_id, **kwargs))
+                            result = future.result()
+                    else:
+                        # If no loop is running, use asyncio.run
+                        result = asyncio.run(self._run_mcp_tool_async(tool, session_id, **kwargs))
+                    final_result = self._format_mcp_result(result)
+                except RuntimeError as re:
+                    if "cannot be called from a running event loop" in str(re):
+                        # Fallback: create new event loop in thread
+                        import concurrent.futures
+                        import threading
+                        def run_in_new_loop():
+                            new_loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(new_loop)
+                            try:
+                                return new_loop.run_until_complete(self._run_mcp_tool_async(tool, session_id, **kwargs))
+                            finally:
+                                new_loop.close()
+                        
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(run_in_new_loop)
+                            result = future.result()
+                        final_result = self._format_mcp_result(result)
+                    else:
+                        raise
             elif isinstance(tool, ToolSpec):
                 final_result = self._execute_standard_tool(tool, **kwargs)
             elif isinstance(tool, AgentToolSpec):
@@ -420,13 +451,9 @@ class ToolManager:
             self._log_execution(tool_name, False, "EXECUTION_ERROR")
             return self._format_error_response(error_msg, tool_name, "EXECUTION_ERROR", str(e))
 
-    def _execute_mcp_tool(self, tool: McpToolSpec, session_id: str, **kwargs) -> str:
-        """Execute MCP tool and format result"""
-        logger.debug(f"Executing MCP tool: {tool.name} on server: {tool.server_name}")
-        
+    def _format_mcp_result(self, result) -> str:
+        """Format MCP tool result to JSON string"""
         try:
-            result = asyncio.run(self._run_mcp_tool_async(tool, session_id, **kwargs))
-            
             # Process MCP result
             if isinstance(result, dict) and result.get('content'):
                 content = result['content']
@@ -438,10 +465,9 @@ class ToolManager:
                 return json.dumps({"content": formatted_content}, ensure_ascii=False, indent=2)
             else:
                 return json.dumps(result, ensure_ascii=False, indent=2)
-                
         except Exception as e:
-            logger.error(f"MCP tool execution failed: {tool.name} - {str(e)}")
-            raise
+            logger.error(f"MCP result formatting failed: {str(e)}")
+            return json.dumps({"error": f"Result formatting failed: {str(e)}"}, ensure_ascii=False, indent=2)
 
     def _execute_standard_tool(self, tool: ToolSpec, **kwargs) -> str:
         """Execute standard tool and format result"""

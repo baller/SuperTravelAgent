@@ -30,10 +30,28 @@ class ServerConfig:
 
 
 @dataclass
+class MCPServerConfig:
+    """MCP服务器配置"""
+    command: Optional[str] = None
+    args: Optional[list] = None
+    env: Optional[Dict[str, str]] = None
+    sse_url: Optional[str] = None
+    disabled: bool = False
+    description: Optional[str] = None
+
+
+@dataclass
+class MCPConfig:
+    """MCP配置"""
+    servers: Dict[str, MCPServerConfig]
+
+
+@dataclass
 class AppConfig:
     """应用配置"""
     model: ModelConfig
     server: ServerConfig
+    mcp: Optional[MCPConfig] = None
     
     def __post_init__(self):
         # 验证必填字段
@@ -135,7 +153,23 @@ class ConfigLoader:
             log_level=server_data.get('log_level', 'info')
         )
         
-        return AppConfig(model=model_config, server=server_config)
+        # MCP配置
+        mcp_config = None
+        mcp_data = self._config_data.get('mcp', {})
+        if mcp_data and 'servers' in mcp_data:
+            servers = {}
+            for server_name, server_data in mcp_data['servers'].items():
+                servers[server_name] = MCPServerConfig(
+                    command=server_data.get('command'),
+                    args=server_data.get('args'),
+                    env=server_data.get('env'),
+                    sse_url=server_data.get('sse_url'),
+                    disabled=server_data.get('disabled', False),
+                    description=server_data.get('description')
+                )
+            mcp_config = MCPConfig(servers=servers)
+        
+        return AppConfig(model=model_config, server=server_config, mcp=mcp_config)
     
     def save_config(self, config: AppConfig):
         """保存配置到文件"""

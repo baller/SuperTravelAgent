@@ -51,6 +51,7 @@ class ChatRequest(BaseModel):
     use_deepthink: bool = True
     use_multi_agent: bool = True
     session_id: Optional[str] = None
+    selected_mcp_servers: Optional[List[str]] = []
 
 class ConfigRequest(BaseModel):
     api_key: str
@@ -282,6 +283,36 @@ async def cleanup_system():
         logger.info("系统资源清理完成")
     except Exception as e:
         logger.error(f"系统清理失败: {e}")
+
+
+async def create_filtered_tool_manager(original_tool_manager, selected_mcp_servers: List[str]):
+    """根据选择的MCP服务器创建筛选后的工具管理器"""
+    try:
+        from agents.tool.tool_manager import ToolManager
+        from agents.tool.tool_base import McpToolSpec
+        
+        # 创建新的工具管理器
+        filtered_manager = ToolManager(is_auto_discover=False)
+        
+        # 复制原有的非MCP工具
+        for tool_name, tool_spec in original_tool_manager.tools.items():
+            if not isinstance(tool_spec, McpToolSpec):
+                # 这是本地工具，直接复制
+                filtered_manager.tools[tool_name] = tool_spec
+            else:
+                # 这是MCP工具，检查是否在选择列表中
+                if tool_spec.server_name in selected_mcp_servers:
+                    filtered_manager.tools[tool_name] = tool_spec
+        
+        logger.info(f"筛选后的工具管理器包含 {len(filtered_manager.tools)} 个工具")
+        logger.info(f"选择的MCP服务器: {selected_mcp_servers}")
+        
+        return filtered_manager
+        
+    except Exception as e:
+        logger.error(f"创建筛选工具管理器失败: {e}")
+        # 出错时返回原工具管理器
+        return original_tool_manager
 
 
 # API路由
@@ -526,10 +557,18 @@ async def chat_stream(request: ChatRequest):
             # 发送开始标记
             yield f"data: {json.dumps({'type': 'chat_start', 'message_id': message_id})}\n\n"
             
+            # 根据选择的MCP服务器创建临时工具管理器
+            effective_tool_manager = tool_manager
+            if request.selected_mcp_servers is not None and len(request.selected_mcp_servers) >= 0:
+                # 创建临时工具管理器，只包含选择的MCP服务器工具
+                effective_tool_manager = await create_filtered_tool_manager(
+                    tool_manager, request.selected_mcp_servers
+                )
+            
             # 使用AgentController进行流式处理
             for chunk in controller.run_stream(
                 input_messages=message_history,
-                tool_manager=tool_manager,
+                tool_manager=effective_tool_manager,
                 session_id=str(uuid.uuid4()),
                 deep_thinking=request.use_deepthink,
                 summary=True,

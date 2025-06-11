@@ -43,6 +43,22 @@ class TaskSummaryAgent(AgentBase):
 4. 不要引用没有出现在执行历史中的文件。
 5. 图表直接使用markdown进行显示。
 6. 不是为了总结执行过程，而是以执行过程的信息为基础，生成一个针对用户任务的完美回答。
+7. **重要**：如果你的回答涉及旅行行程、地点推荐、路线规划等包含具体地理位置的内容，你必须使用map_geocoding工具来获取每个地点的经纬度坐标，并将地点信息以JSON格式附加在回答末尾，格式如下：
+   ```json
+   {{
+     "map_locations": [
+       {{
+         "id": "1",
+         "name": "地点名称",
+         "lat": 纬度,
+         "lng": 经度,
+         "description": "地点描述",
+         "category": "景点|酒店|餐厅|交通|购物|娱乐|其他"
+       }}
+     ]
+   }}
+   ```
+   这样前端地图组件就能自动显示这些地点。
 """
 
     # 系统提示模板常量
@@ -107,7 +123,8 @@ class TaskSummaryAgent(AgentBase):
             summary_context = self._prepare_summary_context(
                 messages=messages,
                 session_id=session_id,
-                system_context=system_context
+                system_context=system_context,
+                tool_manager=tool_manager
             )
             
             # 生成总结提示
@@ -124,7 +141,8 @@ class TaskSummaryAgent(AgentBase):
     def _prepare_summary_context(self, 
                                 messages: List[Dict[str, Any]],
                                 session_id: str,
-                                system_context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+                                system_context: Optional[Dict[str, Any]],
+                                tool_manager: Optional[Any] = None) -> Dict[str, Any]:
         """
         准备任务总结所需的上下文信息
         
@@ -132,6 +150,7 @@ class TaskSummaryAgent(AgentBase):
             messages: 对话消息列表
             session_id: 会话ID
             system_context: 运行时系统上下文字典，用于自定义推理时的变化信息
+            tool_manager: 工具管理器，用于地理编码功能
             
         Returns:
             Dict[str, Any]: 包含总结所需信息的上下文字典
@@ -156,7 +175,8 @@ class TaskSummaryAgent(AgentBase):
             'current_time': current_time,
             'file_workspace': file_workspace,
             'session_id': session_id,
-            'system_context': system_context
+            'system_context': system_context,
+            'tool_manager': tool_manager
         }
         
         logger.info("TaskSummaryAgent: 任务总结上下文准备完成")
@@ -203,13 +223,247 @@ class TaskSummaryAgent(AgentBase):
             system_context=summary_context.get('system_context')
         )
         
-        # 使用基类的流式处理和token跟踪
-        yield from self._execute_streaming_with_token_tracking(
-            prompt=prompt,
-            step_name="task_summary",
-            system_message=system_message,
-            message_type='final_answer'
+        # 获取tool_manager
+        tool_manager = summary_context.get('tool_manager')
+        
+        if tool_manager:
+            # 准备地理编码工具
+            tools_json = []
+            available_tools = tool_manager.get_openai_tools()
+            
+            # 只添加地理编码相关的工具
+            for tool in available_tools:
+                tool_name = tool['function']['name']
+                if 'geocod' in tool_name.lower() or 'map' in tool_name.lower():
+                    tools_json.append(tool)
+            
+            if tools_json:
+                logger.info(f"TaskSummaryAgent: 找到 {len(tools_json)} 个地图相关工具")
+                # 使用支持工具的流式处理
+                yield from self._execute_summary_with_tools(
+                    prompt=prompt,
+                    system_message=system_message,
+                    tools_json=tools_json,
+                    tool_manager=tool_manager,
+                    session_id=summary_context.get('session_id')
+                )
+            else:
+                logger.info("TaskSummaryAgent: 未找到地图相关工具，使用普通流式处理")
+                # 使用基类的流式处理和token跟踪
+                yield from self._execute_streaming_with_token_tracking(
+                    prompt=prompt,
+                    step_name="task_summary",
+                    system_message=system_message,
+                    message_type='final_answer'
+                )
+        else:
+            logger.info("TaskSummaryAgent: 未提供工具管理器，使用普通流式处理")
+            # 使用基类的流式处理和token跟踪
+            yield from self._execute_streaming_with_token_tracking(
+                prompt=prompt,
+                step_name="task_summary",
+                system_message=system_message,
+                message_type='final_answer'
+            )
+
+    def _execute_summary_with_tools(self,
+                                  prompt: str,
+                                  system_message: str,
+                                  tools_json: List[Dict[str, Any]],
+                                  tool_manager: Any,
+                                  session_id: str) -> Generator[List[Dict[str, Any]], None, None]:
+        """
+        使用工具执行任务总结
+        
+        Args:
+            prompt: 总结提示
+            system_message: 系统消息
+            tools_json: 工具配置列表
+            tool_manager: 工具管理器
+            session_id: 会话ID
+            
+        Yields:
+            List[Dict[str, Any]]: 执行结果消息块
+        """
+        logger.info("TaskSummaryAgent: 开始使用工具执行任务总结")
+        
+        # 准备消息，确保内容是字符串且不包含None值
+        clean_system_message = str(system_message) if system_message else ""
+        clean_prompt = str(prompt) if prompt else ""
+        
+        messages = [
+            {'role': 'system', 'content': clean_system_message},
+            {'role': 'user', 'content': clean_prompt}
+        ]
+        
+        # 清理消息格式
+        clean_messages = self.clean_messages(messages)
+        
+        logger.debug(f"TaskSummaryAgent: 准备了 {len(clean_messages)} 条清理后的消息")
+        
+        # 调用LLM
+        response = self.model.chat.completions.create(
+            tools=tools_json,
+            messages=clean_messages,
+            stream=True,
+            stream_options={"include_usage": True},
+            **self.model_config
         )
+        
+        # 处理流式响应
+        yield from self._process_summary_streaming_response(
+            response=response,
+            tool_manager=tool_manager,
+            session_id=session_id
+        )
+
+    def _process_summary_streaming_response(self,
+                                          response,
+                                          tool_manager: Any,
+                                          session_id: str) -> Generator[List[Dict[str, Any]], None, None]:
+        """
+        处理任务总结的流式响应
+        
+        Args:
+            response: LLM流式响应
+            tool_manager: 工具管理器
+            session_id: 会话ID
+            
+        Yields:
+            List[Dict[str, Any]]: 处理后的响应消息块
+        """
+        import uuid
+        import time
+        
+        logger.debug("TaskSummaryAgent: 处理流式响应")
+        
+        tool_calls = {}
+        message_id = str(uuid.uuid4())
+        last_tool_call_id = None
+        
+        # 收集所有chunks用于token跟踪
+        start_time = time.time()
+        chunks = []
+        
+        # 处理流式响应
+        for chunk in response:
+            chunks.append(chunk)
+            if len(chunk.choices) == 0:
+                continue
+                
+            if chunk.choices[0].delta.tool_calls:
+                # 处理工具调用
+                for tool_call in chunk.choices[0].delta.tool_calls:
+                    if tool_call.id and len(tool_call.id) > 0:
+                        last_tool_call_id = tool_call.id
+                        
+                    if last_tool_call_id not in tool_calls:
+                        logger.debug(f"TaskSummaryAgent: 检测到新工具调用: {last_tool_call_id}")
+                        tool_calls[last_tool_call_id] = {
+                            'id': last_tool_call_id,
+                            'type': tool_call.type,
+                            'function': {
+                                'name': tool_call.function.name if tool_call.function.name else '',
+                                'arguments': tool_call.function.arguments if tool_call.function.arguments else ''
+                            }
+                        }
+                    else:
+                        # 追加函数参数
+                        if tool_call.function.arguments:
+                            tool_calls[last_tool_call_id]['function']['arguments'] += tool_call.function.arguments
+                            
+            elif chunk.choices[0].delta.content:
+                if tool_calls:
+                    # 有工具调用时停止收集文本内容
+                    logger.debug(f"TaskSummaryAgent: 检测到 {len(tool_calls)} 个工具调用，停止收集文本内容")
+                    break
+                
+                # 输出文本内容
+                yield self._create_message_chunk(
+                    content=chunk.choices[0].delta.content,
+                    message_id=message_id,
+                    show_content=chunk.choices[0].delta.content,
+                    message_type='final_answer'
+                )
+        
+        # 跟踪token使用
+        self._track_streaming_token_usage(chunks, "task_summary", start_time)
+        
+        # 处理工具调用
+        if tool_calls:
+            yield from self._execute_summary_tool_calls(
+                tool_calls=tool_calls,
+                tool_manager=tool_manager,
+                session_id=session_id
+            )
+        else:
+            # 发送结束消息
+            yield self._create_message_chunk(
+                content='',
+                message_id=message_id,
+                show_content='\n',
+                message_type='final_answer'
+            )
+
+    def _execute_summary_tool_calls(self,
+                                  tool_calls: Dict[str, Any],
+                                  tool_manager: Any,
+                                  session_id: str) -> Generator[List[Dict[str, Any]], None, None]:
+        """
+        执行任务总结中的工具调用
+        
+        Args:
+            tool_calls: 工具调用字典
+            tool_manager: 工具管理器
+            session_id: 会话ID
+            
+        Yields:
+            List[Dict[str, Any]]: 工具执行结果消息块
+        """
+        import uuid
+        
+        logger.info(f"TaskSummaryAgent: 开始执行 {len(tool_calls)} 个工具调用")
+        
+        all_results = []
+        
+        for tool_call_id, tool_call in tool_calls.items():
+            try:
+                function_name = tool_call['function']['name']
+                function_args_str = tool_call['function']['arguments']
+                
+                logger.info(f"TaskSummaryAgent: 执行工具 {function_name}")
+                
+                # 解析参数
+                import json
+                try:
+                    function_args = json.loads(function_args_str)
+                except json.JSONDecodeError as e:
+                    logger.error(f"TaskSummaryAgent: 解析工具参数失败: {e}")
+                    function_args = {}
+                
+                # 执行工具
+                tool_response = tool_manager.execute_tool(
+                    tool_name=function_name,
+                    session_id=session_id,
+                    **function_args
+                )
+                
+                logger.info(f"TaskSummaryAgent: 工具 {function_name} 执行完成")
+                all_results.append(f"使用{function_name}工具获取的结果: {tool_response}")
+                
+            except Exception as e:
+                logger.error(f"TaskSummaryAgent: 工具 {function_name} 执行失败: {e}")
+                all_results.append(f"工具{function_name}执行失败: {str(e)}")
+        
+        # 将所有工具结果合并输出
+        if all_results:
+            combined_result = "\n\n".join(all_results)
+            yield self._create_message_chunk(
+                content=combined_result,
+                message_id=str(uuid.uuid4()),
+                show_content=combined_result,
+                message_type='final_answer'
+            )
 
     def _handle_summary_error(self, error: Exception) -> Generator[List[Dict[str, Any]], None, None]:
         """

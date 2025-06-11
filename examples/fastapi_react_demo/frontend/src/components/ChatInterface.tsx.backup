@@ -66,15 +66,6 @@ interface MessageGroup {
   finalAnswer?: Message | Message[]; // 支持单个或多个最终答案
 }
 
-interface LocationPoint {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  description?: string;
-  category?: string;
-}
-
 interface ChatInterfaceProps {
   currentChatId?: string;
   loadedMessages?: ChatHistoryItem['messages'] | null;
@@ -96,7 +87,6 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
   const [useMultiAgent, setUseMultiAgent] = useState(true);
   const [sessionId, setSessionId] = useState(() => uuidv4());
   const [showMap, setShowMap] = useState(true);
-  const [mapLocations, setMapLocations] = useState<LocationPoint[]>([]);
   
   // MCP服务器相关状态
   const [mcpServers, setMcpServers] = useState<any[]>([]);
@@ -110,35 +100,6 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
   // 新增：复制代码功能
   const [copiedCode, setCopiedCode] = useState<string>('');
 
-  // 从消息内容中提取地点信息
-  const extractMapLocations = (content: string) => {
-    try {
-      // 查找 map_locations JSON
-      const regex = /```json\s*\{\s*"map_locations":\s*\[([\s\S]*?)\]\s*\}\s*```/;
-      const match = content.match(regex);
-      
-      if (match) {
-        const locationsStr = `{"map_locations":[${match[1]}]}`;
-        const parsed = JSON.parse(locationsStr);
-        return parsed.map_locations || [];
-      }
-      
-      // 备用方案：直接查找 map_locations
-      const directRegex = /"map_locations":\s*\[([\s\S]*?)\]/;
-      const directMatch = content.match(directRegex);
-      
-      if (directMatch) {
-        const locationsStr = `[${directMatch[1]}]`;
-        return JSON.parse(locationsStr);
-      }
-      
-      return [];
-    } catch (error) {
-      console.error('解析地点信息失败:', error);
-      return [];
-    }
-  };
-
   // 暴露给父组件的方法
   useImperativeHandle(ref, () => ({
     startNewChat: () => {
@@ -151,8 +112,7 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       setInputValue('');
       console.log('ChatInterface - 输入框已清空');
       setIsLoading(false);
-      setMapLocations([]);
-      console.log('ChatInterface - loading状态和地图位置已重置');
+      console.log('ChatInterface - loading状态已重置');
     },
     loadChat: (chatMessages: ChatHistoryItem['messages']) => {
       setMessages(chatMessages.map(msg => ({
@@ -600,21 +560,6 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             endTime: now,
             duration: existingMessage.startTime ? now.getTime() - existingMessage.startTime.getTime() : 0
           };
-          
-          // 如果这是最终回答，尝试提取地点信息
-          if (data.step_type === 'final_answer' || data.agent_type === 'task_summary') {
-            const locations = extractMapLocations(updatedDisplayContent);
-            if (locations.length > 0) {
-              console.log('提取到地点信息:', locations);
-              setMapLocations(prevLocations => {
-                // 合并新的地点，避免重复
-                const existingIds = prevLocations.map((loc: LocationPoint) => loc.id);
-                const newLocations = locations.filter((loc: LocationPoint) => !existingIds.includes(loc.id));
-                return [...prevLocations, ...newLocations];
-              });
-            }
-          }
-          
           return updated;
         } else {
           // 创建新消息
@@ -630,21 +575,6 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             endTime: now,
             duration: 0
           };
-          
-          // 如果这是最终回答，尝试提取地点信息
-          if (data.step_type === 'final_answer' || data.agent_type === 'task_summary') {
-            const locations = extractMapLocations(showContent);
-            if (locations.length > 0) {
-              console.log('提取到地点信息:', locations);
-              setMapLocations(prevLocations => {
-                // 合并新的地点，避免重复
-                const existingIds = prevLocations.map((loc: LocationPoint) => loc.id);
-                const newLocations = locations.filter((loc: LocationPoint) => !existingIds.includes(loc.id));
-                return [...prevLocations, ...newLocations];
-              });
-            }
-          }
-          
           return [...prev, newMessage];
         }
       });
@@ -1912,10 +1842,7 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
               />
             </div>
           </div>
-          </div>
         </div>
-        
-        {/* 输入框区域 - 已有的输入框代码应该在这里 */}
       </div>
       
       {/* 右侧地图区域 */}
@@ -1925,14 +1852,7 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           height: '100vh',
           overflow: 'hidden'
         }}>
-          <MapComponent 
-            width="100%" 
-            height="100%" 
-            locations={mapLocations}
-            onLocationAdd={(location) => {
-              console.log('添加新地点:', location);
-            }}
-          />
+          <MapComponent width="100%" height="100%" />
         </div>
       )}
     </div>

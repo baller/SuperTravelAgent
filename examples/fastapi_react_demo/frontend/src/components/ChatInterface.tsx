@@ -112,31 +112,286 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
 
   // 从消息内容中提取地点信息
   const extractMapLocations = (content: string) => {
+    const locations: LocationPoint[] = [];
+    
+    // 智能推断地点类别
+    const inferCategory = (name: string, description: string = ''): string => {
+      const text = (name + ' ' + description).toLowerCase();
+      
+      // 人文古迹相关关键词
+      if (text.match(/(寺|庙|神社|shrine|temple|古迹|monument|遗址|site|石窟|飞来峰|佛教|宗教|文物|历史遗迹)/)) {
+        return '人文古迹';
+      }
+      
+      // 自然风光相关关键词  
+      if (text.match(/(湿地|wetland|公园|park|自然|nature|山|mountain|湖|lake|河|river|海|sea|森林|forest|生态|景观|风光|风景)/)) {
+        return '自然风光';
+      }
+      
+      // 文化体验相关关键词
+      if (text.match(/(宋城|主题|theme|乐园|amusement|文化|culture|体验|experience|民俗|传统|艺术|art|表演|show|实景)/)) {
+        return '文化体验';
+      }
+      
+      // 历史建筑相关关键词
+      if (text.match(/(塔|tower|城堡|castle|宫殿|palace|楼|building|阁|pavilion|古建筑|建筑|architecture|历史建筑|文化公园)/)) {
+        return '历史建筑';
+      }
+      
+      // 亲子娱乐相关关键词
+      if (text.match(/(动物|animal|zoo|游乐园|amusement|儿童|children|亲子|family|娱乐|entertainment|乐园|playground|世界|world)/)) {
+        return '亲子娱乐';
+      }
+      
+      // 酒店相关关键词
+      if (text.match(/(酒店|hotel|旅馆|inn|民宿|hostel|度假村|resort)/)) {
+        return 'hotel';
+      }
+      
+      // 餐厅相关关键词
+      if (text.match(/(餐厅|restaurant|饭店|cafe|咖啡|coffee|料理|dining|食堂|canteen|小吃|snack)/)) {
+        return 'restaurant';
+      }
+      
+      // 交通相关关键词
+      if (text.match(/(车站|station|机场|airport|港口|port|码头|pier|地铁|subway|公交|bus)/)) {
+        return 'transport';
+      }
+      
+      // 购物相关关键词
+      if (text.match(/(商店|shop|商场|mall|市场|market|百货|department)/)) {
+        return 'shopping';
+      }
+      
+      // 默认为人文古迹（适合旅游景点）
+      return '人文古迹';
+    };
+    
     try {
-      // 查找 map_locations JSON
-      const regex = /```json\s*\{\s*"map_locations":\s*\[([\s\S]*?)\]\s*\}\s*```/;
-      const match = content.match(regex);
+      // 方法1: 查找完整的JSON格式
+      const fullJsonRegex = /\{[\s\S]*?"map_locations"[\s\S]*?\[[\s\S]*?\][\s\S]*?\}/g;
+      let matches = content.match(fullJsonRegex);
       
-      if (match) {
-        const locationsStr = `{"map_locations":[${match[1]}]}`;
-        const parsed = JSON.parse(locationsStr);
-        return parsed.map_locations || [];
+      if (matches) {
+        matches.forEach(match => {
+          try {
+            // 修复常见的JSON格式错误
+            let fixedJson = fixJsonFormat(match);
+            const data = JSON.parse(fixedJson);
+            if (data.map_locations && Array.isArray(data.map_locations)) {
+              data.map_locations.forEach((loc: any, index: number) => {
+                if (loc.name && (typeof loc.lat === 'number' || typeof loc.lat === 'string') && 
+                    (typeof loc.lng === 'number' || typeof loc.lng === 'string')) {
+                  const category = loc.category || inferCategory(loc.name, loc.description || '');
+                  locations.push({
+                    id: loc.id || `location_${Date.now()}_${index}`,
+                    name: loc.name,
+                    lat: parseFloat(loc.lat.toString()),
+                    lng: parseFloat(loc.lng.toString()),
+                    description: loc.description || '',
+                    category: category
+                  });
+                }
+              });
+            }
+          } catch (error) {
+            console.log('JSON解析失败，尝试部分提取:', error);
+            tryExtractPartialLocations(match, locations);
+          }
+        });
       }
       
-      // 备用方案：直接查找 map_locations
-      const directRegex = /"map_locations":\s*\[([\s\S]*?)\]/;
-      const directMatch = content.match(directRegex);
+      // 方法2: 查找代码块中的JSON
+      const codeBlockRegex = /```json[\s\S]*?\{[\s\S]*?"map_locations"[\s\S]*?\[[\s\S]*?\][\s\S]*?\}[\s\S]*?```/g;
+      matches = content.match(codeBlockRegex);
       
-      if (directMatch) {
-        const locationsStr = `[${directMatch[1]}]`;
-        return JSON.parse(locationsStr);
+      if (matches) {
+        matches.forEach(match => {
+          try {
+            let cleanMatch = match.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+            let fixedJson = fixJsonFormat(cleanMatch);
+            const data = JSON.parse(fixedJson);
+            if (data.map_locations && Array.isArray(data.map_locations)) {
+              data.map_locations.forEach((loc: any, index: number) => {
+                if (loc.name && (typeof loc.lat === 'number' || typeof loc.lat === 'string') && 
+                    (typeof loc.lng === 'number' || typeof loc.lng === 'string')) {
+                  const existingLocation = locations.find(l => l.name === loc.name);
+                  if (!existingLocation) {
+                    const category = loc.category || inferCategory(loc.name, loc.description || '');
+                    locations.push({
+                      id: loc.id || `location_${Date.now()}_${index}`,
+                      name: loc.name,
+                      lat: parseFloat(loc.lat.toString()),
+                      lng: parseFloat(loc.lng.toString()),
+                      description: loc.description || '',
+                      category: category
+                    });
+                  }
+                }
+              });
+            }
+          } catch (error) {
+            console.log('代码块JSON解析失败:', error);
+          }
+        });
       }
       
-      return [];
+      // 方法3: 直接查找 map_locations 数组
+      const directRegex = /"map_locations":\s*\[([\s\S]*?)\]/g;
+      matches = content.match(directRegex);
+      
+      if (matches) {
+        matches.forEach(match => {
+          try {
+            const locationsStr = `[${match.split('[')[1].split(']')[0]}]`;
+            const fixedJson = fixJsonFormat(locationsStr);
+            const locationArray = JSON.parse(fixedJson);
+            locationArray.forEach((loc: any, index: number) => {
+              if (loc.name && (typeof loc.lat === 'number' || typeof loc.lat === 'string') && 
+                  (typeof loc.lng === 'number' || typeof loc.lng === 'string')) {
+                const existingLocation = locations.find(l => l.name === loc.name);
+                if (!existingLocation) {
+                  const category = loc.category || inferCategory(loc.name, loc.description || '');
+                  locations.push({
+                    id: loc.id || `location_${Date.now()}_${index}`,
+                    name: loc.name,
+                    lat: parseFloat(loc.lat.toString()),
+                    lng: parseFloat(loc.lng.toString()),
+                    description: loc.description || '',
+                    category: category
+                  });
+                }
+              }
+            });
+          } catch (error) {
+            console.log('直接数组解析失败:', error);
+          }
+        });
+      }
+      
+      console.log('提取到的地点数量:', locations.length);
+      return locations;
     } catch (error) {
       console.error('解析地点信息失败:', error);
       return [];
     }
+  };
+
+  // 修复常见的JSON格式错误
+  const fixJsonFormat = (jsonStr: string): string => {
+    let fixed = jsonStr;
+    
+    // 修复缺失的逗号（数字后跟字符串）
+    fixed = fixed.replace(/(\d+)(\s+)(")/g, '$1,$2$3');
+    // 修复缺失的逗号（字符串后跟字符串）
+    fixed = fixed.replace(/("[\w\s\u4e00-\u9fa5]+")(\s+)(")/g, '$1,$2$3');
+    // 修复缺失的逗号（在}后跟{）
+    fixed = fixed.replace(/(\})(\s*)(\{)/g, '$1,$2$3');
+    
+    // 修复末尾多余的逗号
+    fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+    
+    // 修复属性名缺少引号
+    fixed = fixed.replace(/(\w+):/g, '"$1":');
+    
+    // 修复类别值缺少引号
+    fixed = fixed.replace(/"category":\s*([^",}\]]+)/g, '"category": "$1"');
+    
+    return fixed;
+  };
+
+  // 尝试从部分JSON中提取地点信息
+  const tryExtractPartialLocations = (content: string, locations: LocationPoint[]) => {
+    // 智能推断地点类别
+    const inferCategory = (name: string, description: string = ''): string => {
+      const text = (name + ' ' + description).toLowerCase();
+      
+      // 人文古迹相关关键词
+      if (text.match(/(寺|庙|神社|shrine|temple|古迹|monument|遗址|site|石窟|飞来峰|佛教|宗教|文物|历史遗迹)/)) {
+        return '人文古迹';
+      }
+      
+      // 自然风光相关关键词  
+      if (text.match(/(湿地|wetland|公园|park|自然|nature|山|mountain|湖|lake|河|river|海|sea|森林|forest|生态|景观|风光|风景)/)) {
+        return '自然风光';
+      }
+      
+      // 文化体验相关关键词
+      if (text.match(/(宋城|主题|theme|乐园|amusement|文化|culture|体验|experience|民俗|传统|艺术|art|表演|show|实景)/)) {
+        return '文化体验';
+      }
+      
+      // 历史建筑相关关键词
+      if (text.match(/(塔|tower|城堡|castle|宫殿|palace|楼|building|阁|pavilion|古建筑|建筑|architecture|历史建筑|文化公园)/)) {
+        return '历史建筑';
+      }
+      
+      // 亲子娱乐相关关键词
+      if (text.match(/(动物|animal|zoo|游乐园|amusement|儿童|children|亲子|family|娱乐|entertainment|乐园|playground|世界|world)/)) {
+        return '亲子娱乐';
+      }
+      
+      // 酒店相关关键词
+      if (text.match(/(酒店|hotel|旅馆|inn|民宿|hostel|度假村|resort)/)) {
+        return 'hotel';
+      }
+      
+      // 餐厅相关关键词
+      if (text.match(/(餐厅|restaurant|饭店|cafe|咖啡|coffee|料理|dining|食堂|canteen|小吃|snack)/)) {
+        return 'restaurant';
+      }
+      
+      // 交通相关关键词
+      if (text.match(/(车站|station|机场|airport|港口|port|码头|pier|地铁|subway|公交|bus)/)) {
+        return 'transport';
+      }
+      
+      // 购物相关关键词
+      if (text.match(/(商店|shop|商场|mall|市场|market|百货|department)/)) {
+        return 'shopping';
+      }
+      
+      // 默认为人文古迹（适合旅游景点）
+      return '人文古迹';
+    };
+    
+    // 使用正则表达式提取单个地点信息
+    const locationRegex = /"name":\s*"([^"]+)"[\s\S]*?"lat":\s*([\d.]+)[\s\S]*?"lng":\s*([\d.]+)/g;
+    let match;
+    
+    while ((match = locationRegex.exec(content)) !== null) {
+      const [, name, lat, lng] = match;
+      if (name && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng))) {
+        const existingLocation = locations.find(l => l.name === name);
+        if (!existingLocation) {
+          locations.push({
+            id: `location_${Date.now()}_${locations.length}`,
+            name: name,
+            lat: parseFloat(lat),
+            lng: parseFloat(lng),
+            description: '',
+            category: inferCategory(name)
+          });
+        }
+      }
+         }
+   };
+
+  // 判断是否应该提取地点信息
+  const shouldExtractLocations = (stepType: string, agentType: string, content: string): boolean => {
+    // 检查消息类型
+    const extractableTypes = ['final_answer', 'task_summary', 'do_subtask_result'];
+    const extractableAgents = ['task_summary', 'executor'];
+    
+    // 检查内容是否包含地理位置相关信息
+    const locationKeywords = ['地点', '位置', '坐标', 'map_locations', '景点', '路线', '旅行', '旅游', '导航'];
+    const hasLocationContent = locationKeywords.some(keyword => content.includes(keyword));
+    
+    // 或者包含JSON格式的地点数据
+    const hasLocationJson = /map_locations|"lat"|"lng"|"name".*"lat".*"lng"/i.test(content);
+    
+    return (extractableTypes.includes(stepType) || extractableAgents.includes(agentType)) && 
+           (hasLocationContent || hasLocationJson);
   };
 
   // 暴露给父组件的方法
@@ -155,22 +410,66 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       console.log('ChatInterface - loading状态和地图位置已重置');
     },
     loadChat: (chatMessages: ChatHistoryItem['messages']) => {
-      setMessages(chatMessages.map(msg => ({
+      const mappedMessages = chatMessages.map(msg => ({
         ...msg,
         timestamp: new Date(msg.timestamp)
-      })));
+      }));
+      setMessages(mappedMessages);
       setInputValue('');
       setIsLoading(false);
+      
+      // 从历史消息中提取地点信息
+      const allLocations: LocationPoint[] = [];
+      mappedMessages.forEach(msg => {
+        if (msg.role === 'assistant' && shouldExtractLocations(msg.type || '', msg.agentType || '', msg.displayContent)) {
+          const locations = extractMapLocations(msg.displayContent);
+          locations.forEach(loc => {
+            const exists = allLocations.find(existing => existing.name === loc.name);
+            if (!exists) {
+              allLocations.push(loc);
+            }
+          });
+        }
+      });
+      
+      if (allLocations.length > 0) {
+        console.log('从历史消息中提取到地点信息:', allLocations);
+        setMapLocations(allLocations);
+      } else {
+        setMapLocations([]);
+      }
     }
   }));
 
   // 当加载的消息改变时，更新当前消息
   useEffect(() => {
     if (loadedMessages) {
-      setMessages(loadedMessages.map(msg => ({
+      const mappedMessages = loadedMessages.map(msg => ({
         ...msg,
         timestamp: new Date(msg.timestamp)
-      })));
+      }));
+      setMessages(mappedMessages);
+      
+      // 从加载的消息中提取地点信息
+      const allLocations: LocationPoint[] = [];
+      mappedMessages.forEach(msg => {
+        if (msg.role === 'assistant' && shouldExtractLocations(msg.type || '', msg.agentType || '', msg.displayContent)) {
+          const locations = extractMapLocations(msg.displayContent);
+          locations.forEach(loc => {
+            const exists = allLocations.find(existing => existing.name === loc.name);
+            if (!exists) {
+              allLocations.push(loc);
+            }
+          });
+        }
+      });
+      
+      if (allLocations.length > 0) {
+        console.log('从加载的消息中提取到地点信息:', allLocations);
+        setMapLocations(allLocations);
+      } else {
+        setMapLocations([]);
+      }
     }
   }, [loadedMessages]);
 
@@ -601,8 +900,8 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             duration: existingMessage.startTime ? now.getTime() - existingMessage.startTime.getTime() : 0
           };
           
-          // 如果这是最终回答，尝试提取地点信息
-          if (data.step_type === 'final_answer' || data.agent_type === 'task_summary') {
+          // 尝试提取地点信息（扩展检测范围）
+          if (shouldExtractLocations(data.step_type, data.agent_type, updatedDisplayContent)) {
             const locations = extractMapLocations(updatedDisplayContent);
             if (locations.length > 0) {
               console.log('提取到地点信息:', locations);
@@ -631,8 +930,8 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             duration: 0
           };
           
-          // 如果这是最终回答，尝试提取地点信息
-          if (data.step_type === 'final_answer' || data.agent_type === 'task_summary') {
+          // 尝试提取地点信息（扩展检测范围）
+          if (shouldExtractLocations(data.step_type, data.agent_type, showContent)) {
             const locations = extractMapLocations(showContent);
             if (locations.length > 0) {
               console.log('提取到地点信息:', locations);
@@ -767,6 +1066,7 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
   // 清空对话
   const handleClearChat = () => {
     setMessages([]);
+    setMapLocations([]);
   };
 
   // 处理MCP服务器选择

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { List, Avatar, Tag, Typography } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
 import L from 'leaflet';
@@ -13,17 +13,23 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// 弧线组件
-const ArcLine: React.FC<{
-  map: any;
-  from: [number, number];
-  to: [number, number];
-  color?: string;
-  weight?: number;
-  opacity?: number;
-}> = ({ map, from, to, color = '#1890ff', weight = 3, opacity = 0.7 }) => {
+// 弧线组件 - 使用 useMap hook
+const ArcLines: React.FC<{
+  connections: Array<{ from: [number, number]; to: [number, number] }>;
+}> = ({ connections }) => {
+  const map = useMap();
+  const arcLinesRef = useRef<L.Polyline[]>([]);
+
   useEffect(() => {
     if (!map) return;
+
+    console.log('ArcLines: 开始绘制连线，连接数量:', connections.length);
+
+    // 清除之前的连线
+    arcLinesRef.current.forEach(line => {
+      map.removeLayer(line);
+    });
+    arcLinesRef.current = [];
 
     // 计算弧线路径
     const calculateArcPath = (start: [number, number], end: [number, number]): [number, number][] => {
@@ -73,56 +79,36 @@ const ArcLine: React.FC<{
       return points;
     };
 
-    const arcPath = calculateArcPath(from, to);
-    
-    // 创建弧线
-    const arcLine = L.polyline(arcPath, {
-      color: color,
-      weight: weight,
-      opacity: opacity,
-      dashArray: '10,10',
-      className: 'arc-line'
-    }).addTo(map);
+    // 添加新的连线
+    connections.forEach((connection, index) => {
+      console.log(`ArcLines: 绘制连线 ${index + 1}:`, connection.from, '->', connection.to);
+      
+      const arcPath = calculateArcPath(connection.from, connection.to);
+      
+      const arcLine = L.polyline(arcPath, {
+        color: '#1890ff',
+        weight: 3,
+        opacity: 0.7,
+        dashArray: '10,10',
+        className: 'arc-line'
+      }).addTo(map);
+
+      arcLinesRef.current.push(arcLine);
+      console.log(`ArcLines: 连线 ${index + 1} 已添加到地图`);
+    });
+
+    console.log('ArcLines: 所有连线绘制完成，总数:', arcLinesRef.current.length);
 
     // 清理函数
     return () => {
-      map.removeLayer(arcLine);
+      arcLinesRef.current.forEach(line => {
+        map.removeLayer(line);
+      });
+      arcLinesRef.current = [];
     };
-  }, [map, from, to, color, weight, opacity]);
+  }, [map, connections]);
 
   return null;
-};
-
-// 弧线管理组件
-const ArcLines: React.FC<{
-  mapRef: any;
-  connections: Array<{ from: [number, number]; to: [number, number] }>;
-}> = ({ mapRef, connections }) => {
-  const [map, setMap] = useState<any>(null);
-
-  useEffect(() => {
-    if (mapRef.current) {
-      setMap(mapRef.current);
-    }
-  }, [mapRef]);
-
-  if (!map) return null;
-
-  return (
-    <>
-      {connections.map((connection, index) => (
-        <ArcLine
-          key={`arc-${index}`}
-          map={map}
-          from={connection.from}
-          to={connection.to}
-          color="#1890ff"
-          weight={3}
-          opacity={0.7}
-        />
-      ))}
-    </>
-  );
 };
 
 // 创建彩色圆形标记图标
@@ -248,26 +234,74 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [locations, setLocations] = useState<LocationPoint[]>(initialLocations);
   const [selectedLocation, setSelectedLocation] = useState<LocationPoint | null>(null);
   const mapRef = useRef<any>(null);
+  const prevLocationsRef = useRef<LocationPoint[]>([]);
 
-  // 当外部传入地点数据时更新本地状态
-  useEffect(() => {
-    if (externalLocations.length > 0) {
-      console.log('收到地点数据:', externalLocations);
-      setLocations(externalLocations);
-      // 如果有地点数据，自动缩放地图以显示所有地点
-      if (mapRef.current && externalLocations.length > 0) {
-        setTimeout(() => {
-          const bounds = L.latLngBounds(externalLocations.map(loc => [loc.lat, loc.lng]));
-          mapRef.current.fitBounds(bounds, { 
-            padding: [50, 50],
-            maxZoom: 15 
-          });
-        }, 500);
+  // 检查地点数据是否真的发生了变化
+  const hasLocationsChanged = () => {
+    if (externalLocations.length !== prevLocationsRef.current.length) return true;
+    
+    // 检查每个地点的ID是否相同
+    for (let i = 0; i < externalLocations.length; i++) {
+      if (externalLocations[i].id !== prevLocationsRef.current[i]?.id) {
+        return true;
       }
-    } else {
-      setLocations([]);
+    }
+    
+    return false;
+  };
+
+  // 处理地点数据变化
+  useEffect(() => {
+    if (hasLocationsChanged()) {
+      console.log('地点数据发生变化:', {
+        之前的地点数量: prevLocationsRef.current.length,
+        新的地点数量: externalLocations.length,
+        新地点: externalLocations.map(loc => loc.name)
+      });
+      
+      setLocations(externalLocations);
+      prevLocationsRef.current = [...externalLocations]; // 使用深拷贝避免引用问题
+
+      // 当地点数据变化时，调整地图视图
+      if (mapRef.current && externalLocations.length > 0) {
+        // 延迟一下确保地图标记已经渲染
+        setTimeout(() => {
+          // 创建包含所有地点的边界
+          const bounds = L.latLngBounds(
+            externalLocations.map(loc => [loc.lat, loc.lng])
+          );
+          
+          // 添加一些内边距
+          const padding = [50, 50];
+          
+          // 使用flyToBounds平滑过渡到新的视图
+          mapRef.current.flyToBounds(bounds, {
+            padding: padding,
+            duration: 1.5,
+            easeLinearity: 0.25
+          });
+        }, 200);
+      } else if (mapRef.current && externalLocations.length === 0) {
+        // 当地点数据为空时，重置到默认位置
+        console.log('地点数据为空，重置地图到默认位置');
+        mapRef.current.setView([39.9042, 116.4074], 12);
+      }
     }
   }, [externalLocations]);
+
+  // 处理地图加载完成
+  useEffect(() => {
+    if (mapRef.current && locations.length > 0) {
+      const bounds = L.latLngBounds(
+        locations.map(loc => [loc.lat, loc.lng])
+      );
+      mapRef.current.flyToBounds(bounds, {
+        padding: [50, 50],
+        duration: 1.5,
+        easeLinearity: 0.25
+      });
+    }
+  }, [mapRef.current]);
 
   // 定位到指定位置
   const flyToLocation = (location: LocationPoint) => {
@@ -303,7 +337,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
   // 生成弧线连接的地点对
   const getArcConnections = () => {
-    if (locations.length < 2) return [];
+    if (locations.length < 2) {
+      console.log('getArcConnections: 地点数量不足，无法生成连线');
+      return [];
+    }
+    
     const connections = [];
     for (let i = 0; i < locations.length - 1; i++) {
       connections.push({
@@ -311,6 +349,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
         to: [locations[i + 1].lat, locations[i + 1].lng] as [number, number]
       });
     }
+    
+    console.log('getArcConnections: 生成连线数量:', connections.length);
+    connections.forEach((conn, idx) => {
+      console.log(`连线 ${idx + 1}: (${conn.from[0]}, ${conn.from[1]}) -> (${conn.to[0]}, ${conn.to[1]})`);
+    });
+    
     return connections;
   };
 
@@ -472,10 +516,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
               </Marker>
             );
           })}
+          
+          {/* 弧线连接 */}
+          <ArcLines connections={getArcConnections()} />
         </MapContainer>
-        
-        {/* 弧线连接 */}
-        <ArcLines mapRef={mapRef} connections={getArcConnections()} />
       </div>
 
       {/* 地点列表 */}
@@ -485,6 +529,45 @@ const MapComponent: React.FC<MapComponentProps> = ({
         borderTop: '1px solid #f0f0f0',
         background: '#fafafa'
       }}>
+        {/* 地点列表标题栏 */}
+        <div style={{
+          padding: '8px 16px',
+          borderBottom: '1px solid #f0f0f0',
+          background: '#f8f9fa',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            fontSize: '13px',
+            fontWeight: 'bold',
+            color: '#333'
+          }}>
+            行程地点 ({locations.length})
+          </div>
+          {locations.length > 0 && (
+            <button
+              onClick={() => {
+                console.log('手动清理地点按钮被点击');
+                setLocations([]);
+                prevLocationsRef.current = [];
+              }}
+              style={{
+                background: 'none',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                padding: '2px 8px',
+                fontSize: '11px',
+                color: '#666',
+                cursor: 'pointer',
+                lineHeight: '16px'
+              }}
+            >
+              清空
+            </button>
+          )}
+        </div>
+
         {locations.length === 0 ? (
           <div style={{
             padding: '20px',

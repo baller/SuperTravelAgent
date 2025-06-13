@@ -29,7 +29,7 @@ const AppContent: React.FC = () => {
     
     // 重置状态
     setCurrentChatId('');
-    setLoadedMessages(null);
+    setLoadedMessages([]); // 设置为空数组而不是null，这样会触发useEffect清空地图
     
     // 使用setTimeout确保ChatInterface组件已经渲染完成
     setTimeout(() => {
@@ -54,16 +54,15 @@ const AppContent: React.FC = () => {
 
   // 处理选择历史对话
   const handleChatSelect = (chatId: string, messages: ChatHistoryItem['messages']) => {
+    console.log('App.tsx - handleChatSelect被调用，chatId:', chatId, '消息数量:', messages.length);
+    
     // 导航到首页
     navigate('/');
     
     setCurrentChatId(chatId);
-    setLoadedMessages(messages);
-    
-    // 确保ChatInterface组件已渲染
-    setTimeout(() => {
-      chatInterfaceRef.current?.loadChat(messages);
-    }, 50);
+    // 通过 loadedMessages 的变化来触发 ChatInterface 的 useEffect
+    // 不再直接调用 loadChat 方法，避免重复处理
+    setLoadedMessages([...messages]); // 使用新数组确保触发 useEffect
   };
 
   // 主题配置 - 豆包风格

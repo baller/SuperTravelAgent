@@ -97,6 +97,13 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
   const [sessionId, setSessionId] = useState(() => uuidv4());
   const [showMap, setShowMap] = useState(true);
   const [mapLocations, setMapLocations] = useState<LocationPoint[]>([]);
+
+  // 强制清理地点数据的函数
+  const forceCleanMapLocations = () => {
+    console.log('强制清理地点数据，当前地点:', mapLocations.map(loc => loc.name));
+    setMapLocations([]);
+    console.log('地点数据已强制清理');
+  };
   
   // MCP服务器相关状态
   const [mcpServers, setMcpServers] = useState<any[]>([]);
@@ -397,54 +404,25 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
   // 暴露给父组件的方法
   useImperativeHandle(ref, () => ({
     startNewChat: () => {
-      console.log('ChatInterface - startNewChat方法被调用');
-      console.log('ChatInterface - 当前消息数量:', messages.length);
+      console.log('=== startNewChat 开始 ===');
+      console.log('清空前的地图位置:', mapLocations.map(loc => loc.name));
       setMessages([]);
-      console.log('ChatInterface - 消息已清空');
+      setMapLocations([]); // 清空地图地点
+      console.log('地图位置已清空');
       setSessionId(uuidv4());
-      console.log('ChatInterface - 新的sessionId已生成');
       setInputValue('');
-      console.log('ChatInterface - 输入框已清空');
-      setIsLoading(false);
-      setMapLocations([]);
-      console.log('ChatInterface - loading状态和地图位置已重置');
+      console.log('=== startNewChat 完成 ===');
     },
-    loadChat: (chatMessages: ChatHistoryItem['messages']) => {
-      const mappedMessages = chatMessages.map(msg => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp)
-      }));
-      setMessages(mappedMessages);
-      setInputValue('');
-      setIsLoading(false);
+    loadChat: (messages: ChatHistoryItem['messages']) => {
+      console.log('=== loadChat 开始 ===');
+      console.log('加载消息数量:', messages.length);
+      console.log('清空前的地图位置:', mapLocations.map(loc => loc.name));
       
-      // 从历史消息中提取地点信息
-      const allLocations: LocationPoint[] = [];
-      mappedMessages.forEach(msg => {
-        if (msg.role === 'assistant' && shouldExtractLocations(msg.type || '', msg.agentType || '', msg.displayContent)) {
-          const locations = extractMapLocations(msg.displayContent);
-          locations.forEach(loc => {
-            const exists = allLocations.find(existing => existing.name === loc.name);
-            if (!exists) {
-              allLocations.push(loc);
-            }
-          });
-        }
-      });
+      // 先清空地图位置，避免显示之前的地点
+      setMapLocations([]);
+      console.log('地图位置已清空');
       
-      if (allLocations.length > 0) {
-        console.log('从历史消息中提取到地点信息:', allLocations);
-        setMapLocations(allLocations);
-      } else {
-        setMapLocations([]);
-      }
-    }
-  }));
-
-  // 当加载的消息改变时，更新当前消息
-  useEffect(() => {
-    if (loadedMessages) {
-      const mappedMessages = loadedMessages.map(msg => ({
+      const mappedMessages = messages.map(msg => ({
         ...msg,
         timestamp: new Date(msg.timestamp)
       }));
@@ -454,20 +432,62 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       const allLocations: LocationPoint[] = [];
       mappedMessages.forEach(msg => {
         if (msg.role === 'assistant' && shouldExtractLocations(msg.type || '', msg.agentType || '', msg.displayContent)) {
+          console.log('检查消息是否包含地点:', msg.type, msg.agentType);
           const locations = extractMapLocations(msg.displayContent);
-          locations.forEach(loc => {
-            const exists = allLocations.find(existing => existing.name === loc.name);
-            if (!exists) {
-              allLocations.push(loc);
-            }
-          });
+          if (locations.length > 0) {
+            console.log('从消息中提取到地点:', locations.map(loc => loc.name));
+            locations.forEach(loc => {
+              const exists = allLocations.find(existing => existing.name === loc.name);
+              if (!exists) {
+                allLocations.push(loc);
+              }
+            });
+          }
         }
       });
       
-      if (allLocations.length > 0) {
-        console.log('从加载的消息中提取到地点信息:', allLocations);
+      console.log('从loadChat中提取到的最终地点信息:', allLocations.map(loc => loc.name));
+      setMapLocations(allLocations);
+      setSessionId(uuidv4());
+      console.log('=== loadChat 完成 ===');
+    }
+  }));
+
+  // 当加载的消息改变时，通过 loadChat 方法处理
+  useEffect(() => {
+    if (loadedMessages !== null && loadedMessages !== undefined) {
+      console.log('useEffect 检测到 loadedMessages 变化，消息数量:', loadedMessages.length);
+      
+      // 先清空地图位置，避免显示之前的地点
+      setMapLocations([]);
+      
+      if (loadedMessages.length > 0) {
+        const mappedMessages = loadedMessages.map(msg => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+        setMessages(mappedMessages);
+        
+        // 从加载的消息中提取地点信息
+        const allLocations: LocationPoint[] = [];
+        mappedMessages.forEach(msg => {
+          if (msg.role === 'assistant' && shouldExtractLocations(msg.type || '', msg.agentType || '', msg.displayContent)) {
+            const locations = extractMapLocations(msg.displayContent);
+            locations.forEach(loc => {
+              const exists = allLocations.find(existing => existing.name === loc.name);
+              if (!exists) {
+                allLocations.push(loc);
+              }
+            });
+          }
+        });
+        
+        console.log('从useEffect中提取到地点信息:', allLocations);
         setMapLocations(allLocations);
       } else {
+        // 如果是空数组，清空消息和地图
+        console.log('loadedMessages为空数组，清空消息和地图');
+        setMessages([]);
         setMapLocations([]);
       }
     }
@@ -2117,7 +2137,16 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
                   type="text"
                   size="small"
                   icon={<EnvironmentOutlined />}
-                  onClick={() => setShowMap(!showMap)}
+                  onClick={() => {
+                    setShowMap(!showMap);
+                    // 如果显示地图且有地点，延迟一下再触发地图重新渲染
+                    if (!showMap && mapLocations.length > 0) {
+                      setTimeout(() => {
+                        // 触发地图重新渲染，会自动缩放到地点
+                        setMapLocations([...mapLocations]);
+                      }, 300); // 增加延迟时间确保地图组件完全加载
+                    }
+                  }}
                   style={{
                     color: showMap ? '#1890ff' : '#9ca3af',
                     fontSize: '12px',
@@ -2127,8 +2156,24 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
                     background: showMap ? '#f0f9ff' : 'transparent'
                   }}
                 >
-                  地图
+                  地图{mapLocations.length > 0 && `(${mapLocations.length})`}
                 </Button>
+                {mapLocations.length > 0 && (
+                  <Button
+                    type="text"
+                    size="small"
+                    onClick={forceCleanMapLocations}
+                    style={{
+                      color: '#ff4d4f',
+                      fontSize: '11px',
+                      height: '20px',
+                      padding: '0 6px',
+                      borderRadius: '4px'
+                    }}
+                  >
+                    清除地点
+                  </Button>
+                )}
               </div>
             </div>
 

@@ -19,9 +19,7 @@ agents/config.yml
 .env.development
 .env.production
 .env.test
-backend/.env*
-frontend/.env*
-agents/.env*
+
 
 # API密钥配置
 api_keys.json

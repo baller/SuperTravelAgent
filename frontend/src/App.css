@@ -1,0 +1,602 @@
+/* App.css */
+
+/* 确保页面不滚动 */
+html, body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+.App {
+  text-align: center;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 豆包风格的侧边栏菜单样式 */
+.sidebar-menu .ant-menu-item {
+  border-radius: 8px !important;
+  margin: 4px 0 !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  transition: all 0.2s ease !important;
+}
+
+.sidebar-menu .ant-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+.sidebar-menu .ant-menu-item-selected {
+  background: linear-gradient(90deg, #6366f1, #8b5cf6) !important;
+  color: #ffffff !important;
+  font-weight: 500 !important;
+}
+
+.sidebar-menu .ant-menu-item-selected::after {
+  display: none !important;
+}
+
+.sidebar-menu .ant-menu-item .ant-menu-item-icon {
+  font-size: 16px !important;
+  margin-right: 12px !important;
+}
+
+/* 新对话按钮特殊样式 */
+.sidebar-menu .ant-menu-item[data-menu-id*="new-chat"] {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  margin-bottom: 12px !important;
+}
+
+.sidebar-menu .ant-menu-item[data-menu-id*="new-chat"]:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* 浅色侧边栏菜单样式 - 豆包风格 */
+.sidebar-menu-light .ant-menu-item {
+  border-radius: 8px !important;
+  margin: 4px 0 !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  color: #6b7280 !important;
+  transition: all 0.2s ease !important;
+  background: transparent !important;
+}
+
+.sidebar-menu-light .ant-menu-item:hover {
+  background: #f8fafc !important;
+  color: #1f2937 !important;
+}
+
+.sidebar-menu-light .ant-menu-item-selected {
+  background: linear-gradient(90deg, #6366f1, #8b5cf6) !important;
+  color: #ffffff !important;
+  font-weight: 500 !important;
+}
+
+.sidebar-menu-light .ant-menu-item-selected::after {
+  display: none !important;
+}
+
+.sidebar-menu-light .ant-menu-item .ant-menu-item-icon {
+  font-size: 16px !important;
+  margin-right: 12px !important;
+}
+
+/* 新对话按钮特殊样式 - 浅色版本 */
+.sidebar-menu-light .ant-menu-item[data-menu-id*="new-chat"] {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  margin-bottom: 12px !important;
+  color: #1f2937 !important;
+}
+
+.sidebar-menu-light .ant-menu-item[data-menu-id*="new-chat"]:hover {
+  background: #f1f5f9 !important;
+  border-color: #d1d5db !important;
+}
+
+/* 自定义滚动条 - 豆包风格 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* 旅游工具和服务页面滚动优化 */
+.tools-panel, .mcp-servers-panel {
+  height: 100vh;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.tools-panel::-webkit-scrollbar, .mcp-servers-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tools-panel::-webkit-scrollbar-thumb, .mcp-servers-panel::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 4px;
+}
+
+.tools-panel::-webkit-scrollbar-thumb:hover, .mcp-servers-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+/* 消息动画 */
+.message-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.message-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: all 300ms ease-in-out;
+}
+
+/* 加载动画 */
+.loading-dots {
+  display: inline-block;
+}
+
+.loading-dots::after {
+  content: '...';
+  animation: dots 2s infinite;
+}
+
+@keyframes dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+  100% { content: ''; }
+}
+
+/* 代码块样式优化 - 豆包风格 */
+.markdown-content pre {
+  background: #f6f8fa;
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  border: 1px solid #e1e5e9;
+}
+
+.markdown-content code {
+  background: #f1f3f4;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', monospace;
+  font-size: 0.85em;
+}
+
+/* 消息气泡动画 */
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 智能体消息滑入动画 - 与深度思考框一致 */
+@keyframes agentMessageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(15px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.message-bubble {
+  animation: messageSlideIn 0.3s ease-out;
+}
+
+/* 输入框焦点样式 - 豆包风格多行设计 */
+.chat-input-container {
+  transition: all 0.2s ease;
+}
+
+.chat-input-container:focus-within {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+}
+
+/* 输入框内部文本区域样式 */
+.chat-input-container .ant-input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.chat-input-container .ant-input:focus {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 输入框内按钮悬停效果 */
+.chat-input-container .ant-btn-text:hover {
+  background: #f8fafc !important;
+  color: #6b7280 !important;
+}
+
+/* 输入框顶部功能区域样式 */
+.chat-input-container .ant-switch-small {
+  min-width: 28px;
+  height: 16px;
+}
+
+.chat-input-container .ant-switch-small .ant-switch-handle {
+  width: 12px;
+  height: 12px;
+}
+
+.chat-input-container .ant-switch-small .ant-switch-handle::before {
+  border-radius: 6px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ant-layout-sider {
+    position: fixed !important;
+    z-index: 999;
+    height: 100vh;
+  }
+  
+  .ant-layout-content {
+    margin-left: 0 !important;
+  }
+  
+  .sidebar-menu .ant-menu-item {
+    height: 36px !important;
+    line-height: 36px !important;
+  }
+}
+
+/* 暗色模式适配 */
+@media (prefers-color-scheme: dark) {
+  .markdown-content pre {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+  }
+  
+  .markdown-content code {
+    background: #334155;
+    color: #e2e8f0;
+  }
+}
+
+/* 深度思考气泡框样式 */
+.deep-think-collapse .ant-collapse-header {
+  padding: 12px 16px !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+}
+
+.deep-think-collapse .ant-collapse-content {
+  border-top: none !important;
+  background: transparent !important;
+}
+
+.deep-think-collapse .ant-collapse-content-box {
+  padding: 0 16px 12px 16px !important;
+}
+
+.deep-think-collapse .ant-collapse-item {
+  border: none !important;
+  background: transparent !important;
+}
+
+.deep-think-collapse .ant-collapse-arrow {
+  display: none !important;
+}
+
+/* 深度思考消息动画 */
+@keyframes deepThinkPulse {
+  0%, 100% { 
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2); 
+  }
+  50% { 
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4); 
+  }
+}
+
+.deep-think-bubble {
+  animation: deepThinkPulse 2s infinite;
+}
+
+/* 深度思考内容区域滚动条样式 */
+.deep-think-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.deep-think-content::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 3px;
+}
+
+.deep-think-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.deep-think-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 历史对话项悬停效果 */
+.chat-history-item:hover .chat-item-more-btn {
+  opacity: 1 !important;
+}
+
+/* 深度思考中的JSON代码块特殊样式 */
+.deep-think-content .markdown-content pre {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  padding: 12px !important;
+  margin: 8px 0 !important;
+  overflow-x: auto !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+.deep-think-content .markdown-content code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', monospace !important;
+  font-size: 11px !important;
+}
+
+/* 深度思考气泡脉冲动画 */
+
+/* 新增深度思考气泡框动画 */
+@keyframes deepThinkSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes deepThinkMessageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes agentPulse {
+  0%, 100% { 
+    transform: scale(1);
+    box-shadow: 0 0 6px rgba(139, 92, 246, 0.4); 
+  }
+  50% { 
+    transform: scale(1.1);
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.6); 
+  }
+}
+
+/* 深度思考容器悬停效果 */
+.deep-think-main-container:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* 深度思考头部悬停效果 */
+.deep-think-header:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+}
+
+/* 深度思考消息项悬停效果 */
+.deep-think-message-item:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  background: linear-gradient(135deg, #fcfcfd 0%, #f9fafb 100%) !important;
+}
+
+/* 深度思考气泡容器样式优化 */
+.deep-think-bubble-container {
+  position: relative;
+}
+
+.deep-think-bubble-container::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 60%;
+  background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+  border-radius: 2px;
+  opacity: 0.6;
+} 
+
+/* 智能体消息悬停效果 - 与深度思考框一致 */
+.message-bubble:not(.user-message):hover .markdown-content {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08), 0 3px 6px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* 智能体类型标签悬停效果 */
+.message-bubble:not(.user-message):hover .agent-type-tag {
+  transform: scale(1.02) !important;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3) !important;
+}
+
+/* 输入框容器悬停效果 */
+.chat-input-container:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* 发送按钮悬停效果 */
+.ant-btn-primary:hover {
+  transform: scale(1.1) !important;
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4) !important;
+}
+
+/* 地图按钮动画 */
+@keyframes mapButtonPulse {
+  0%, 100% { 
+    transform: scale(1);
+  }
+  50% { 
+    transform: scale(1.05);
+  }
+}
+
+.map-button-active {
+  animation: mapButtonPulse 2s infinite;
+}
+
+/* 侧边栏历史项滑入动画 */
+@keyframes historyItemSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.chat-history-item {
+  animation: historyItemSlideIn 0.3s ease-out;
+}
+
+/* 表格样式优化 - 与整体风格一致 */
+.ant-table {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+.ant-table-thead > tr > th {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  border: none !important;
+  color: #374151 !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  padding: 12px 16px !important;
+}
+
+.ant-table-tbody > tr > td {
+  border: none !important;
+  padding: 12px 16px !important;
+  font-size: 13px !important;
+  color: #374151 !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  transition: all 0.2s ease !important;
+}
+
+.table-row-even {
+  background: linear-gradient(135deg, #ffffff 0%, #fafbff 100%) !important;
+}
+
+.table-row-odd {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%) !important;
+  transform: scale(1.01) !important;
+}
+
+.ant-table-tbody > tr:last-child > td {
+  border-bottom: none !important;
+}
+
+/* 表格容器动画 */
+@keyframes tableSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ant-table-wrapper {
+  animation: tableSlideIn 0.4s ease-out !important;
+}
+
+/* 备用HTML表格样式 */
+.markdown-content table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  font-size: 13px !important;
+  color: #374151 !important;
+}
+
+.markdown-content table th {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  padding: 12px 16px !important;
+  text-align: left !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+
+.markdown-content table td {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  color: #374151 !important;
+  transition: background 0.2s ease !important;
+}
+
+.markdown-content table tr:nth-child(even) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+}
+
+.markdown-content table tr:nth-child(odd) {
+  background: linear-gradient(135deg, #ffffff 0%, #fafbff 100%) !important;
+}
+
+.markdown-content table tr:hover {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%) !important;
+  transform: scale(1.005) !important;
+}
+
+.markdown-content table tr:last-child td {
+  border-bottom: none !important;
+}

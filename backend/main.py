@@ -1,0 +1,749 @@
+"""
+Sage FastAPI + React Demo Backend
+
+现代化多智能体协作Web应用后端
+采用FastAPI + WebSocket实现实时通信
+支持从配置文件自动加载模型配置
+"""
+
+import os
+import sys
+import json
+import uuid
+import asyncio
+import traceback
+import time
+from pathlib import Path
+from typing import List, Dict, Any, Optional, AsyncGenerator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, status, Response, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
+from pydantic import BaseModel
+import uvicorn
+
+# 添加项目路径
+project_root = Path(__file__).parent.parent
+print(project_root)
+sys.path.append(str(project_root))
+
+from agents.agent.agent_controller import AgentController
+from agents.tool.tool_manager import ToolManager
+from agents.utils.logger import logger
+from agents.config import get_settings
+from openai import OpenAI
+
+# 导入新的配置加载器
+from config_loader import get_app_config, save_app_config, ModelConfig
+
+
+# Pydantic模型定义
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+    message_id: str = None
+    type: str = "normal"
+
+class ChatRequest(BaseModel):
+    type: str = "chat"
+    messages: List[ChatMessage]
+    use_deepthink: bool = True
+    use_multi_agent: bool = True
+    session_id: Optional[str] = None
+    selected_mcp_servers: Optional[List[str]] = []
+
+class ConfigRequest(BaseModel):
+    api_key: str
+    model_name: str = "deepseek-chat"
+    base_url: str = "https://api.deepseek.com/v1"
+    max_tokens: Optional[int] = 4096
+    temperature: Optional[float] = 0.7
+
+class ToolInfo(BaseModel):
+    name: str
+    description: str
+    parameters: Dict[str, Any]
+
+class SystemStatus(BaseModel):
+    status: str
+    agents_count: int
+    tools_count: int
+    active_sessions: int
+    version: str = "0.8"
+
+# 全局变量
+tool_manager: Optional[ToolManager] = None
+controller: Optional[AgentController] = None
+active_sessions: Dict[str, Dict] = {}
+
+# 存储会话状态
+sessions: Dict[str, Dict] = {}
+
+
+class ConnectionManager:
+    """WebSocket连接管理器"""
+    
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.session_connections: Dict[str, WebSocket] = {}
+    
+    async def connect(self, websocket: WebSocket, session_id: str = None):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        if session_id:
+            self.session_connections[session_id] = websocket
+        logger.info(f"WebSocket连接建立，会话ID: {session_id}")
+    
+    def disconnect(self, websocket: WebSocket, session_id: str = None):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        if session_id and session_id in self.session_connections:
+            del self.session_connections[session_id]
+        logger.info(f"WebSocket连接断开，会话ID: {session_id}")
+    
+    async def send_personal_message(self, message: dict, session_id: str):
+        if session_id in self.session_connections:
+            try:
+                await self.session_connections[session_id].send_text(json.dumps(message))
+            except Exception as e:
+                logger.error(f"发送消息失败: {e}")
+    
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(json.dumps(message))
+            except Exception as e:
+                logger.error(f"广播消息失败: {e}")
+
+
+# 初始化连接管理器
+manager = ConnectionManager()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时初始化
+    logger.info("FastAPI应用启动中...")
+    await initialize_system()
+    yield
+    # 关闭时清理
+    logger.info("FastAPI应用关闭中...")
+    await cleanup_system()
+
+
+# 创建FastAPI应用
+app = FastAPI(
+    title="Sage Multi-Agent Framework",
+    description="现代化多智能体协作框架API",
+    version="0.8"
+)
+
+# 添加CORS中间件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8080", "http://127.0.0.1:8080", "*"],  # 允许前端开发服务器
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 手动添加CORS响应头的函数
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*" 
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
+# 使用事件处理器替代lifespan
+@app.on_event("startup")
+async def startup_event():
+    """应用启动事件"""
+    await initialize_system()
+
+@app.on_event("shutdown") 
+async def shutdown_event():
+    """应用关闭事件"""
+    await cleanup_system()
+
+
+async def initialize_system():
+    """初始化系统组件"""
+    global tool_manager, controller
+    try:
+        # 加载应用配置
+        app_config = get_app_config()
+        print("🚀 Sage Multi-Agent Framework 启动中...")
+        print(f"📊 模型: {app_config.model.model_name}")
+        print(f"🔗 API: {app_config.model.base_url}")
+        
+        # 初始化工具管理器（不自动发现MCP工具，避免异步问题）
+        tool_manager = ToolManager(is_auto_discover=False)
+        # 手动进行自动发现本地工具
+        tool_manager._auto_discover_tools()
+        
+        # 注册MCP服务器（如果配置了的话）
+        if app_config.mcp and app_config.mcp.servers:
+            print("🔧 初始化MCP服务器...")
+            for server_name, server_config in app_config.mcp.servers.items():
+                if not server_config.disabled:
+                    try:
+                        # 构建配置字典
+                        mcp_config = {}
+                        if server_config.command:
+                            mcp_config['command'] = server_config.command
+                            if server_config.args:
+                                mcp_config['args'] = server_config.args
+                        elif server_config.sse_url:
+                            mcp_config['sse_url'] = server_config.sse_url
+                        
+                        if server_config.env:
+                            mcp_config['env'] = server_config.env
+                        
+                        success = await tool_manager.register_mcp_server(server_name, mcp_config)
+                        if success:
+                            print(f"✅ MCP服务器 {server_name} 注册成功")
+                            if server_config.description:
+                                print(f"   描述: {server_config.description}")
+                        else:
+                            print(f"❌ MCP服务器 {server_name} 注册失败")
+                    except Exception as e:
+                        print(f"❌ MCP服务器 {server_name} 注册异常: {str(e)}")
+                        logger.error(f"MCP服务器注册失败: {e}")
+                else:
+                    print(f"⏸️ MCP服务器 {server_name} 已禁用")
+        
+        logger.info("工具管理器初始化完成")
+        
+        # 优先使用配置文件中的模型配置
+        if app_config.model.api_key:
+            # 使用配置文件的设置
+            model = OpenAI(
+                api_key=app_config.model.api_key,
+                base_url=app_config.model.base_url
+            )
+            
+            model_config = {
+                "model": app_config.model.model_name,
+                "temperature": app_config.model.temperature,
+                "max_tokens": app_config.model.max_tokens
+            }
+            
+            controller = AgentController(model, model_config)
+            logger.info(f"✅ 智能体控制器初始化完成 (使用配置文件)")
+            print(f"✅ 系统已就绪，模型: {app_config.model.model_name}")
+            
+            # 同步到Sage框架的配置系统
+            settings = get_settings()
+            settings.model.api_key = app_config.model.api_key
+            settings.model.model_name = app_config.model.model_name
+            settings.model.base_url = app_config.model.base_url
+            settings.model.max_tokens = app_config.model.max_tokens
+            settings.model.temperature = app_config.model.temperature
+        else:
+            # 如果配置文件没有API密钥，尝试从Sage框架配置加载
+            settings = get_settings()
+            if settings.model.api_key:
+                model = OpenAI(
+                    api_key=settings.model.api_key,
+                    base_url=settings.model.base_url
+                )
+                
+                model_config = {
+                    "model": settings.model.model_name,
+                    "temperature": settings.model.temperature,
+                    "max_tokens": settings.model.max_tokens
+                }
+                
+                controller = AgentController(model, model_config)
+                logger.info("✅ 智能体控制器初始化完成 (使用Sage配置)")
+                print(f"✅ 系统已就绪，模型: {settings.model.model_name}")
+            else:
+                print("⚠️  未配置API密钥，需要通过Web界面配置或在config.yaml中设置")
+                print("💡 提示：编辑 backend/config.yaml 文件，设置您的API密钥")
+        
+    except Exception as e:
+        logger.error(f"系统初始化失败: {e}")
+        print(f"❌ 系统初始化失败: {e}")
+        print("💡 请检查配置文件或网络连接")
+
+
+async def cleanup_system():
+    """清理系统资源"""
+    global active_sessions
+    try:
+        # 清理活跃会话
+        for session_id in list(active_sessions.keys()):
+            if tool_manager:
+                await tool_manager.cleanup_session(session_id)
+        active_sessions.clear()
+        logger.info("系统资源清理完成")
+    except Exception as e:
+        logger.error(f"系统清理失败: {e}")
+
+
+async def create_filtered_tool_manager(original_tool_manager, selected_mcp_servers: List[str]):
+    """根据选择的MCP服务器创建筛选后的工具管理器"""
+    try:
+        from agents.tool.tool_manager import ToolManager
+        from agents.tool.tool_base import McpToolSpec
+        
+        # 创建新的工具管理器
+        filtered_manager = ToolManager(is_auto_discover=False)
+        
+        # 复制原有的非MCP工具
+        for tool_name, tool_spec in original_tool_manager.tools.items():
+            if not isinstance(tool_spec, McpToolSpec):
+                # 这是本地工具，直接复制
+                filtered_manager.tools[tool_name] = tool_spec
+            else:
+                # 这是MCP工具，检查是否在选择列表中
+                if tool_spec.server_name in selected_mcp_servers:
+                    filtered_manager.tools[tool_name] = tool_spec
+        
+        logger.info(f"筛选后的工具管理器包含 {len(filtered_manager.tools)} 个工具")
+        logger.info(f"选择的MCP服务器: {selected_mcp_servers}")
+        
+        return filtered_manager
+        
+    except Exception as e:
+        logger.error(f"创建筛选工具管理器失败: {e}")
+        # 出错时返回原工具管理器
+        return original_tool_manager
+
+
+# API路由
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    """根路径，返回React应用"""
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Sage Multi-Agent Framework</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body>
+        <div id="root"></div>
+        <script>
+            // 如果React应用未构建，显示提示信息
+            document.getElementById('root').innerHTML = `
+                <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+                    <h1>🧠 Sage Multi-Agent Framework</h1>
+                    <p>FastAPI Backend is running successfully!</p>
+                    <p>Please build and serve the React frontend to see the full interface.</p>
+                    <div style="margin-top: 30px;">
+                        <h3>API Endpoints:</h3>
+                        <ul style="list-style: none;">
+                            <li>📡 WebSocket: <code>ws://localhost:8000/ws</code></li>
+                            <li>🔧 API Docs: <a href="/docs">http://localhost:8000/docs</a></li>
+                            <li>⚙️ System Status: <a href="/api/status">http://localhost:8000/api/status</a></li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+        </script>
+    </body>
+    </html>
+    """)
+
+
+@app.get("/api/status", response_model=SystemStatus)
+async def get_system_status(response: Response):
+    """获取系统状态"""
+    add_cors_headers(response)
+    try:
+        tools_count = len(tool_manager.list_tools()) if tool_manager else 0
+        return SystemStatus(
+            status="running",
+            agents_count=7,  # Sage框架的智能体数量
+            tools_count=tools_count,
+            active_sessions=len(active_sessions)
+        )
+    except Exception as e:
+        logger.error(f"获取系统状态失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/configure")
+async def configure_system(config: ConfigRequest, response: Response):
+    """配置系统"""
+    add_cors_headers(response)
+    global controller
+    try:
+        # 获取当前设置并更新模型配置
+        settings = get_settings()
+        settings.model.api_key = config.api_key
+        settings.model.model_name = config.model_name
+        settings.model.base_url = config.base_url
+        settings.model.max_tokens = config.max_tokens
+        settings.model.temperature = config.temperature
+        
+        # 同时更新配置文件
+        app_config = get_app_config()
+        app_config.model.api_key = config.api_key
+        app_config.model.model_name = config.model_name
+        app_config.model.base_url = config.base_url
+        app_config.model.max_tokens = config.max_tokens
+        app_config.model.temperature = config.temperature
+        
+        # 保存到配置文件
+        save_app_config(app_config)
+        
+        # 重新初始化模型和控制器
+        model = OpenAI(
+            api_key=config.api_key,
+            base_url=config.base_url
+        )
+        
+        model_config = {
+            "model": config.model_name,
+            "temperature": config.temperature,
+            "max_tokens": config.max_tokens
+        }
+        
+        controller = AgentController(model, model_config)
+        
+        logger.info(f"系统配置更新成功: {config.model_name}")
+        print(f"🔄 配置已更新并保存: {config.model_name}")
+        return {"status": "success", "message": "配置更新成功并已保存到文件"}
+        
+    except Exception as e:
+        logger.error(f"系统配置失败: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/tools", response_model=List[ToolInfo])
+async def get_tools(response: Response):
+    """获取可用工具列表"""
+    add_cors_headers(response)
+    try:
+        if not tool_manager:
+            return []
+        
+        tools = tool_manager.list_tools_simplified()
+        return [
+            ToolInfo(
+                name=tool["name"],
+                description=tool["description"],
+                parameters=tool.get("parameters", {})
+            )
+            for tool in tools
+        ]
+    except Exception as e:
+        logger.error(f"获取工具列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/mcp-servers")
+async def get_mcp_servers(response: Response):
+    """获取MCP服务器状态"""
+    add_cors_headers(response)
+    try:
+        app_config = get_app_config()
+        mcp_servers = []
+        
+        if app_config.mcp and app_config.mcp.servers:
+            for server_name, server_config in app_config.mcp.servers.items():
+                server_info = {
+                    "name": server_name,
+                    "disabled": server_config.disabled,
+                    "description": server_config.description,
+                    "type": "sse" if server_config.sse_url else "stdio",
+                    "config": {},
+                    "tools_count": 0
+                }
+                
+                if server_config.command:
+                    server_info["config"]["command"] = server_config.command
+                    server_info["config"]["args"] = server_config.args
+                elif server_config.sse_url:
+                    server_info["config"]["sse_url"] = server_config.sse_url
+                
+                # 检查工具管理器中是否有相关工具
+                if tool_manager:
+                    # 统计来自此服务器的工具数量
+                    all_tools = tool_manager.list_tools()
+                    server_tools = []
+                    if server_name == "baidu-map":
+                        server_tools = [tool for tool in all_tools 
+                                      if tool.get("name", "").startswith("map_")]
+                    elif server_name == "12306-mcp":
+                        server_tools = [tool for tool in all_tools 
+                                      if tool.get("name", "").startswith("12306_") or 
+                                         "12306" in tool.get("name", "").lower() or
+                                         "train" in tool.get("name", "").lower()]
+                    server_info["tools_count"] = len(server_tools)
+                
+                mcp_servers.append(server_info)
+        
+        return {
+            "servers": mcp_servers,
+            "total_servers": len(mcp_servers),
+            "active_servers": len([s for s in mcp_servers if not s["disabled"]])
+        }
+    
+    except Exception as e:
+        logger.error(f"获取MCP服务器状态失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取MCP服务器状态失败: {str(e)}")
+
+
+@app.post("/api/chat")
+async def chat_endpoint(request: ChatRequest):
+    """聊天API端点（非流式）"""
+    try:
+        if not controller:
+            raise HTTPException(status_code=400, detail="系统未配置，请先配置API密钥")
+        
+        # 转换消息格式
+        messages = [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "type": msg.type or "normal",
+                "message_id": msg.message_id or str(uuid.uuid4())
+            }
+            for msg in request.messages
+        ]
+        
+        # 执行智能体对话
+        result = controller.run(
+            messages,
+            tool_manager,
+            session_id=request.session_id,
+            deep_thinking=request.use_deepthink,
+            summary=True,
+            deep_research=request.use_multi_agent
+        )
+        
+        return {
+            "status": "success",
+            "result": result,
+            "session_id": request.session_id
+        }
+        
+    except Exception as e:
+        logger.error(f"聊天处理失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/chat-stream")
+async def chat_stream(request: ChatRequest):
+    """处理聊天请求并返回流式响应"""
+    
+    if not controller:
+        raise HTTPException(status_code=500, detail="系统未配置，请先配置API密钥")
+    
+    async def generate_stream() -> AsyncGenerator[str, None]:
+        try:
+            # 构建消息历史
+            message_history = []
+            for msg in request.messages:
+                message_history.append({
+                    "role": msg.role,
+                    "content": msg.content,
+                    "message_id": msg.message_id or str(uuid.uuid4()),
+                    "type": msg.type
+                })
+            
+            # 生成回复消息ID
+            message_id = str(uuid.uuid4())
+            
+            # 发送开始标记
+            yield f"data: {json.dumps({'type': 'chat_start', 'message_id': message_id})}\n\n"
+            
+            # 根据选择的MCP服务器创建临时工具管理器
+            effective_tool_manager = tool_manager
+            if request.selected_mcp_servers is not None and len(request.selected_mcp_servers) >= 0:
+                # 创建临时工具管理器，只包含选择的MCP服务器工具
+                effective_tool_manager = await create_filtered_tool_manager(
+                    tool_manager, request.selected_mcp_servers
+                )
+            
+            # 使用AgentController进行流式处理
+            for chunk in controller.run_stream(
+                input_messages=message_history,
+                tool_manager=effective_tool_manager,
+                session_id=str(uuid.uuid4()),
+                deep_thinking=request.use_deepthink,
+                summary=True,
+                deep_research=request.use_multi_agent
+            ):
+                # 处理消息块
+                for msg in chunk:
+                    data = {
+                        'type': 'chat_chunk',
+                        'message_id': msg.get('message_id', message_id),
+                        'role': msg.get('role', 'assistant'),
+                        'content': msg.get('content', ''),
+                        'show_content': msg.get('show_content', ''),
+                        'step_type': msg.get('type', ''),
+                        'agent_type': msg.get('role', '')
+                    }
+                    
+                    yield f"data: {json.dumps(data)}\n\n"
+                    await asyncio.sleep(0.01)  # 小延迟避免过快
+            
+            # 发送完成标记
+            yield f"data: {json.dumps({'type': 'chat_complete', 'message_id': message_id})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"流式处理错误: {str(e)}")
+            error_data = {
+                'type': 'error',
+                'message': str(e)
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+    
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control"
+        }
+    )
+
+
+@app.get("/api/sse/{session_id}")
+async def sse_endpoint(session_id: str):
+    """SSE连接端点"""
+    
+    async def event_stream():
+        try:
+            # 发送连接成功消息
+            yield f"data: {json.dumps({'type': 'connected', 'session_id': session_id})}\n\n"
+            
+            # 保持连接
+            while True:
+                await asyncio.sleep(30)  # 每30秒发送心跳
+                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+                
+        except Exception as e:
+            logger.error(f"SSE连接错误: {str(e)}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control"
+        }
+    )
+
+
+@app.get("/api/sessions")
+async def get_active_sessions():
+    """获取活跃会话列表"""
+    return {
+        "active_sessions": list(active_sessions.keys()),
+        "count": len(active_sessions)
+    }
+
+
+@app.delete("/api/sessions/{session_id}")
+async def cleanup_session(session_id: str):
+    """清理指定会话"""
+    try:
+        if session_id in active_sessions:
+            if tool_manager:
+                await tool_manager.cleanup_session(session_id)
+            del active_sessions[session_id]
+            logger.info(f"会话 {session_id} 已清理")
+        return {"status": "success", "message": f"会话 {session_id} 已清理"}
+    except Exception as e:
+        logger.error(f"清理会话失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/download/{session_id}/{filename}")
+@app.head("/api/download/{session_id}/{filename}")
+async def download_file(session_id: str, filename: str):
+    """下载生成的文件"""
+    try:
+        # 构建文件路径
+        file_path = Path(f"/home/user_3/Advanced_AI_Course/SuperTravelAgent/outputs/{session_id}/{filename}")
+        
+        # 安全检查：确保文件在输出目录内
+        output_base = Path("/home/user_3/Advanced_AI_Course/SuperTravelAgent/outputs")
+        try:
+            file_path.resolve().relative_to(output_base.resolve())
+        except ValueError:
+            raise HTTPException(status_code=403, detail="访问被拒绝：文件路径无效")
+        
+        # 检查文件是否存在
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="文件不存在")
+        
+        # 确定文件的MIME类型
+        import mimetypes
+        mime_type, _ = mimetypes.guess_type(str(file_path))
+        if mime_type is None:
+            mime_type = "application/octet-stream"
+        
+        # 返回文件
+        from fastapi.responses import FileResponse
+        import urllib.parse
+        
+        # 对中文文件名进行URL编码
+        encoded_filename = urllib.parse.quote(filename, safe='')
+        
+        return FileResponse(
+            path=str(file_path),
+            filename=filename,
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+                "Access-Control-Allow-Origin": "*"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"下载文件失败: {e}")
+        raise HTTPException(status_code=500, detail=f"下载文件失败: {str(e)}")
+
+
+@app.options("/{rest_of_path:path}")
+async def options_handler(rest_of_path: str, response: Response):
+    """处理OPTIONS预检请求"""
+    add_cors_headers(response)
+    return {"message": "OK"}
+
+
+# 静态文件服务（用于React构建文件）
+static_path = Path(__file__).parent / "static"
+if static_path.exists():
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
+
+
+if __name__ == "__main__":
+    # 加载配置
+    app_config = get_app_config()
+    
+    print("🌟 启动 Sage Multi-Agent Framework 服务器")
+    print(f"🏠 地址: http://{app_config.server.host}:{app_config.server.port}")
+    print(f"📚 API文档: http://{app_config.server.host}:{app_config.server.port}/docs")
+    print(f"🔄 热重载: {'开启' if app_config.server.reload else '关闭'}")
+    
+    uvicorn.run(
+        "main:app",
+        host=app_config.server.host,
+        port=app_config.server.port,
+        reload=app_config.server.reload,
+        log_level=app_config.server.log_level
+    ) 

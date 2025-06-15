@@ -2465,15 +2465,21 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       display: 'flex', 
       flexDirection: 'row',
       overflow: 'hidden',
-      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
+      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+      padding: '16px',
+      gap: '16px'
     }}>
       {/* 左侧聊天区域 */}
       <div style={{ 
-        flex: showMap ? '0 0 60%' : 1,
+        flex: showMap ? '0 0 calc(60% - 8px)' : 1,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        borderRight: showMap ? '1px solid #e5e7eb' : 'none'
+        background: '#ffffff',
+        borderRadius: '16px',
+        boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
+        border: '1px solid rgba(255, 255, 255, 0.6)',
+        height: 'calc(100vh - 32px)'
       }}>
         {/* 消息列表 - 豆包风格 */}
         <div style={{ 
@@ -2481,7 +2487,8 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           overflow: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center'
+          alignItems: 'center',
+          borderRadius: '16px'
         }}>
           <div style={{
             width: '100%',
@@ -3169,20 +3176,21 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       {/* 右侧地图区域 */}
       {showMap && (
         <div style={{ 
-          flex: '0 0 40%',
-          height: '100vh',
+          flex: '0 0 calc(40% - 8px)',
+          height: 'calc(100vh - 32px)',
           overflow: 'hidden',
-          background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-          borderLeft: '1px solid #e2e8f0',
-          boxShadow: '-4px 0 12px rgba(0, 0, 0, 0.06), -2px 0 4px rgba(0, 0, 0, 0.02)',
+          background: '#ffffff',
+          borderRadius: '16px',
+          boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
+          border: '1px solid rgba(255, 255, 255, 0.6)',
           position: 'relative'
         }}>
           <div style={{
             position: 'absolute',
             top: '16px',
             left: '16px',
-            right: '16px',
-            zIndex: 1000,
+            right: '60px', // 给右侧缩放控制留出空间
+            zIndex: 999, // 降低层级，让缩放控制在上方
             background: 'linear-gradient(135deg, #ffffff 0%, #fafbff 100%)',
             borderRadius: '12px',
             padding: '12px 16px',
@@ -3214,14 +3222,21 @@ const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
               </span>
             )}
           </div>
-          <MapComponent 
-            width="100%" 
-            height="100%" 
-            locations={mapLocations}
-            onLocationAdd={(location) => {
-              console.log('添加新地点:', location);
-            }}
-          />
+          <div style={{ 
+            width: '100%', 
+            height: '100%', 
+            borderRadius: '16px', 
+            overflow: 'hidden' 
+          }}>
+            <MapComponent 
+              width="100%" 
+              height="100%" 
+              locations={mapLocations}
+              onLocationAdd={(location) => {
+                console.log('添加新地点:', location);
+              }}
+            />
+          </div>
         </div>
       )}
     </div>

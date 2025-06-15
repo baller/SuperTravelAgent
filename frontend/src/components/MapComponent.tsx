@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl } from 'react-leaflet';
 import { List, Avatar, Tag, Typography } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
 import L from 'leaflet';
@@ -347,11 +347,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
       height,
       display: 'flex',
       flexDirection: 'column',
-      background: '#fff',
-      borderRadius: '8px',
+      background: 'linear-gradient(135deg, #ffffff 0%, #fafbff 100%)',
+      borderRadius: '16px',
       overflow: 'hidden',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-      position: 'relative'
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.02)',
+      border: '1px solid rgba(255, 255, 255, 0.8)',
+      position: 'relative',
+      backdropFilter: 'blur(10px)',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     }}>
       {/* 添加自定义CSS样式 */}
       <style>{`
@@ -397,6 +400,100 @@ const MapComponent: React.FC<MapComponentProps> = ({
         .leaflet-popup-tip {
           background: white;
         }
+        
+        /* 确保地图缩放控制按钮不被遮挡 */
+        .leaflet-control-zoom {
+          z-index: 1001 !important;
+          margin-top: 80px !important; /* 避开顶部标题栏 */
+          margin-right: 10px !important; /* 给右侧留出空间 */
+        }
+        
+        /* 当缩放控制在右上角时的特殊样式 */
+        .leaflet-top.leaflet-right .leaflet-control-zoom {
+          margin-top: 80px !important;
+          margin-right: 15px !important;
+        }
+        
+        /* 确保其他地图控制元素的层级 */
+        .leaflet-control-container {
+          pointer-events: none;
+        }
+        
+        .leaflet-control {
+          pointer-events: auto;
+        }
+        
+        /* 优化缩放控制按钮样式 */
+        .leaflet-control-zoom a {
+          background: rgba(255, 255, 255, 0.95) !important;
+          border: 1px solid rgba(0, 0, 0, 0.1) !important;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+          transition: all 0.2s ease !important;
+          font-size: 16px !important;
+          line-height: 26px !important;
+        }
+        
+        .leaflet-control-zoom a:hover {
+          background: #ffffff !important;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+          transform: scale(1.05);
+        }
+        
+        /* 确保缩放控制按钮文字清晰可见 */
+        .leaflet-control-zoom-in,
+        .leaflet-control-zoom-out {
+          color: #333 !important;
+        }
+        
+        /* 地图容器边框优化 */
+        .leaflet-container {
+          border-radius: 12px !important;
+          overflow: hidden !important;
+        }
+        
+        /* 地图图层平滑过渡 */
+        .leaflet-tile-pane {
+          filter: contrast(1.05) saturate(1.1) brightness(1.02);
+        }
+        
+        /* 地图加载时的优雅效果 */
+        .leaflet-tile {
+          transition: opacity 0.3s ease !important;
+        }
+        
+        /* 为地图添加内阴影效果 */
+        .leaflet-map-pane::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          pointer-events: none;
+          border-radius: 12px;
+          box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.05);
+          z-index: 1000;
+        }
+        
+        /* 自定义滚动条样式 */
+        .map-location-list::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .map-location-list::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 3px;
+        }
+        
+        .map-location-list::-webkit-scrollbar-thumb {
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.4) 0%, rgba(139, 92, 246, 0.4) 100%);
+          border-radius: 3px;
+          transition: all 0.2s ease;
+        }
+        
+        .map-location-list::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.6) 0%, rgba(139, 92, 246, 0.6) 100%);
+        }
       `}</style>
 
       {/* 地图容器 */}
@@ -406,11 +503,15 @@ const MapComponent: React.FC<MapComponentProps> = ({
           zoom={12}
           style={{ width: '100%', height: '100%' }}
           ref={mapRef}
+          zoomControl={false} // 禁用默认缩放控制，我们将手动添加
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          
+          {/* 自定义位置的缩放控制 */}
+          <ZoomControl position="topright" />
           
           {/* 地点标记 */}
           {locations.map((location, index) => {
@@ -506,25 +607,33 @@ const MapComponent: React.FC<MapComponentProps> = ({
       </div>
 
       {/* 地点列表 */}
-      <div style={{
-        maxHeight: '200px',
-        overflowY: 'auto',
-        borderTop: '1px solid #f0f0f0',
-        background: '#fafafa'
-      }}>
+      <div 
+        className="map-location-list"
+        style={{
+          maxHeight: '200px',
+          overflowY: 'auto',
+          borderTop: '1px solid rgba(255, 255, 255, 0.3)',
+          background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.8) 0%, rgba(241, 245, 249, 0.9) 100%)',
+          backdropFilter: 'blur(8px)'
+        }}>
         {/* 地点列表标题栏 */}
         <div style={{
-          padding: '8px 16px',
-          borderBottom: '1px solid #f0f0f0',
-          background: '#f8f9fa',
+          padding: '12px 16px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.4)',
+          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.95) 100%)',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          backdropFilter: 'blur(10px)'
         }}>
           <div style={{
-            fontSize: '13px',
-            fontWeight: 'bold',
-            color: '#333'
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#374151',
+            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
           }}>
             行程地点 ({locations.length})
           </div>
@@ -536,14 +645,25 @@ const MapComponent: React.FC<MapComponentProps> = ({
                 prevLocationsRef.current = [];
               }}
               style={{
-                background: 'none',
-                border: '1px solid #d9d9d9',
-                borderRadius: '4px',
-                padding: '2px 8px',
+                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(248, 113, 113, 0.1) 100%)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                padding: '4px 12px',
                 fontSize: '11px',
-                color: '#666',
+                color: '#ef4444',
                 cursor: 'pointer',
-                lineHeight: '16px'
+                lineHeight: '16px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease',
+                backdropFilter: 'blur(4px)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(248, 113, 113, 0.15) 100%)';
+                e.currentTarget.style.transform = 'scale(1.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(248, 113, 113, 0.1) 100%)';
+                e.currentTarget.style.transform = 'scale(1)';
               }}
             >
               清空
@@ -553,10 +673,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
         {locations.length === 0 ? (
           <div style={{
-            padding: '20px',
+            padding: '24px',
             textAlign: 'center',
-            color: '#999',
-            fontSize: '12px'
+            color: '#9ca3af',
+            fontSize: '13px'
           }}>
             <EnvironmentOutlined style={{ fontSize: '24px', marginBottom: '8px', display: 'block' }} />
             暂无地点
@@ -572,12 +692,31 @@ const MapComponent: React.FC<MapComponentProps> = ({
             renderItem={(location, index) => (
             <List.Item
               style={{
-                padding: '8px 16px',
+                padding: '12px 16px',
                 cursor: 'pointer',
-                backgroundColor: selectedLocation?.id === location.id ? '#e6f7ff' : 'transparent',
-                borderBottom: index < locations.length - 1 ? '1px solid #f0f0f0' : 'none'
+                backgroundColor: selectedLocation?.id === location.id 
+                  ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)' 
+                  : 'transparent',
+                borderBottom: index < locations.length - 1 ? '1px solid rgba(255, 255, 255, 0.3)' : 'none',
+                transition: 'all 0.2s ease',
+                borderRadius: selectedLocation?.id === location.id ? '8px' : '0',
+                margin: selectedLocation?.id === location.id ? '4px 8px' : '0'
               }}
               onClick={() => flyToLocation(location)}
+              onMouseEnter={(e) => {
+                if (selectedLocation?.id !== location.id) {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+                  e.currentTarget.style.borderRadius = '8px';
+                  e.currentTarget.style.margin = '4px 8px';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (selectedLocation?.id !== location.id) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.borderRadius = '0';
+                  e.currentTarget.style.margin = '0';
+                }
+              }}
             >
               <List.Item.Meta
                 avatar={

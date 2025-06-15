@@ -27,78 +27,95 @@ SuperTravelAgent 是一个多智能体旅游规划智能体，通过无缝衔接
 SuperTravelAgent 采用现代化多智能体协作架构，结合了强大的后端服务和业界最完整的旅游工具生态系统：
 
 ```mermaid
-graph TB
-    subgraph "🌐 前端应用"
-        A[React + TypeScript 界面] --> B[Ant Design UI组件]
-        B --> C[WebSocket实时通信]
-        C --> D[智能体状态可视化]
+graph TD
+    subgraph "🌐 前端层"
+        A[React + TypeScript 界面]
+        B[Ant Design UI组件]
+        C[WebSocket实时通信]
+        D[智能体状态可视化]
+        A --> B
+        B --> C
+        C --> D
     end
     
-    subgraph "⚡ FastAPI后端"
-        E[REST API接口] --> F[WebSocket管理器]
-        F --> G[配置管理系统]
-        G --> H[会话管理]
+    subgraph "⚡ 服务层"
+        E[REST API接口]
+        F[WebSocket管理器]
+        G[配置管理系统]
+        H[会话管理]
+        E --> F
+        F --> G
+        G --> H
     end
     
-    subgraph "🤖 多智能体系统"
-        I[智能体控制器] --> J[任务分析智能体]
-        I --> K[任务分解智能体]
-        I --> L[规划智能体]
-        I --> M[执行智能体]
-        I --> N[观察智能体]
-        I --> O[总结智能体]
+    subgraph "🤖 智能体层"
+        I[智能体控制器]
+        subgraph "智能体矩阵"
+            J[任务分析智能体]
+            K[任务分解智能体]
+            L[规划智能体]
+            M[执行智能体]
+            N[观察智能体]
+            O[总结智能体]
+        end
+        I --> J
+        I --> K
+        I --> L
+        I --> M
+        I --> N
+        I --> O
     end
     
-    subgraph "🛠️ 专业旅游MCP服务矩阵"
-        P[MCP管理器] --> Q[🗺️ 百度地图MCP]
-        P --> R[🚄 12306火车票MCP]
-        P --> S[📱 小红书MCP]
-        P --> T[🔍 网络搜索MCP]
-        P --> U[📁 文件系统MCP]
-        P --> V[🌐 HTTP请求MCP]
-        P --> W1[🎨 PowerPaint图像编辑]
-        
-        Q --> Q1[地理编码/逆编码]
-        Q --> Q2[POI搜索]
-        Q --> Q3[路线规划]
-        Q --> Q4[周边搜索]
-        
-        R --> R1[列车时刻表]
-        R --> R2[余票查询]
-        R --> R3[中转搜索]
-        R --> R4[过站信息]
-        
-        S --> S1[旅游笔记搜索]
-        S --> S2[用户体验分析]
-        S --> S3[热门景点发现]
-        S --> S4[社交内容筛选]
-        
-        T --> T1[实时信息搜索]
-        T --> T2[旅游资讯获取]
-        T --> T3[价格信息查询]
-        
-        W1 --> W11[图像修复/美化]
-        W1 --> W12[物体移除/添加]
-        W1 --> W13[图像扩展]
-        W1 --> W14[形状引导生成]
-    end
-    
-    subgraph "📊 监控统计"
-        W[Token使用跟踪] --> X[成本分析]
-        X --> Y[性能监控]
-        Y --> Z[会话统计]
+    subgraph "🛠️ MCP服务层"
+        P[MCP管理器]
+        subgraph "地图服务"
+            Q[🗺️ 百度地图MCP]
+            Q1[地理编码]
+            Q2[POI搜索]
+            Q --> Q1
+            Q --> Q2
+        end
+        subgraph "交通服务"
+            R[🚄 12306火车票MCP]
+            R1[列车时刻表]
+            R2[余票查询]
+            R --> R1
+            R --> R2
+        end
+        subgraph "内容服务"
+            S[📱 小红书MCP]
+            T[🔍 网络搜索MCP]
+            S1[旅游笔记]
+            T1[实时搜索]
+            S --> S1
+            T --> T1
+        end
+        subgraph "工具服务"
+            U[📁 文件系统MCP]
+            V[🌐 HTTP请求MCP]
+            W1[🎨 PowerPaint图像编辑]
+            W11[图像修复]
+            W12[物体编辑]
+            W1 --> W11
+            W1 --> W12
+        end
+        P --> Q
+        P --> R
+        P --> S
+        P --> T
+        P --> U
+        P --> V
+        P --> W1
     end
     
     A --> E
     E --> I
-        I --> P
-    I --> W
-    P --> M
+    I --> P
+    M --> P
     
     style A fill:#e1f5fe
     style I fill:#fff3e0
     style P fill:#f3e5f5
-    style W fill:#e8f5e8
     style Q fill:#e8f5e8
     style R fill:#fff3e0
     style S fill:#ffebee

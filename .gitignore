@@ -381,3 +381,4 @@ docs/build/
 !config_example.yml
 !.env.example
 !mcp_setting_example.json
+演示视频脚本.md

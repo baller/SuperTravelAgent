@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "baidu-maps": {
+      "command": "node",
+      "args": ["./mcp_servers/baidu-maps-mcp/dist/index.js"],
+      "env": {
+        "BAIDU_API_KEY": "your_baidu_api_key_here"
+      }
+    },
+    "12306-train": {
+      "command": "node", 
+      "args": ["./mcp_servers/12306-train-mcp/dist/index.js"],
+      "env": {
+        "TRAIN_API_KEY": "your_train_api_key_here"
+      }
+    },
+    "xiaohongshu": {
+      "command": "node",
+      "args": ["./mcp_servers/xhs-mcp/dist/index.js"],
+      "env": {
+        "XHS_API_KEY": "your_xiaohongshu_api_key_here"
+      }
+    },
+    "serper-web-search": {
+      "command": "node",
+      "args": ["./mcp_servers/serper-web-search-mcp/dist/index.js"],
+      "env": {
+        "SERPER_API_KEY": "your_serper_api_key_here"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./outputs"]
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"]
+    }
+  }
+} 

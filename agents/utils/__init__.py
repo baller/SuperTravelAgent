@@ -6,7 +6,7 @@
 
 from agents.utils.logger import logger
 from agents.utils.exceptions import (
-    SageException,
+    SuperTravelAgentException,
     ToolExecutionError,
     AgentTimeoutError,
     RetryConfig,
@@ -17,7 +17,7 @@ from agents.utils.exceptions import (
 
 __all__ = [
     'logger',
-    'SageException',
+    'SuperTravelAgentException',
     'ToolExecutionError',
     'AgentTimeoutError', 
     'RetryConfig',

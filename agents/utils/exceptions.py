@@ -13,17 +13,17 @@ from functools import wraps
 from agents.utils.logger import logger
 
 # 基础异常类
-class SageException(Exception):
-    """Sage框架基础异常类"""
+class SuperTravelAgentException(Exception):
+    """SuperTravelAgent框架基础异常类"""
     pass
 
-class ToolExecutionError(SageException):
+class ToolExecutionError(SuperTravelAgentException):
     """工具执行错误"""
     def __init__(self, message: str, tool_name: str = None):
         super().__init__(message)
         self.tool_name = tool_name
 
-class AgentTimeoutError(SageException):
+class AgentTimeoutError(SuperTravelAgentException):
     """智能体超时错误"""
     pass
 
@@ -98,7 +98,7 @@ def handle_exception(exception: Exception, context: dict = None):
     return error_info
 
 __all__ = [
-    'SageException',
+    'SuperTravelAgentException',
     'ToolExecutionError', 
     'AgentTimeoutError',
     'RetryConfig',

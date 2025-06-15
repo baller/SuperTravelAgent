@@ -1,2 +1,385 @@
-frontend/node_modules
-outputs/*
+# =============================================================================
+# SuperTravelAgent - Git 忽略配置
+# =============================================================================
+
+# =============================================================================
+# 配置文件 (包含敏感信息)
+# =============================================================================
+# 主配置文件
+config.yaml
+config.yml
+backend/config.yaml
+backend/config.yml
+agents/config.yaml
+agents/config.yml
+
+# 环境变量文件
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+backend/.env*
+frontend/.env*
+agents/.env*
+
+# API密钥配置
+api_keys.json
+api_keys.yaml
+secrets.json
+secrets.yaml
+credentials.json
+credentials.yaml
+
+# MCP服务器配置
+mcp_setting.json
+mcp_config.json
+mcp_servers.json
+backend/mcp_setting.json
+backend/mcp_config.json
+
+# =============================================================================
+# 日志文件
+# =============================================================================
+# 所有日志文件
+*.log
+logs/
+backend/logs/
+agents/logs/
+frontend/logs/
+mcp_servers/logs/
+
+# 日志备份文件
+*.log.*
+*.log.gz
+*.log.bak
+
+# =============================================================================
+# 输出和临时文件
+# =============================================================================
+# 输出目录
+outputs/
+output/
+temp/
+tmp/
+cache/
+
+# 会话数据
+sessions/
+session_data/
+chat_history/
+
+# =============================================================================
+# Python 相关
+# =============================================================================
+# 字节码文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 分发/打包
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# 单元测试/覆盖率报告
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# =============================================================================
+# Node.js / Frontend 相关
+# =============================================================================
+# 依赖
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# 运行时数据
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# Dependency directories
+jspm_packages/
+
+# TypeScript v1 declaration files
+typings/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+public
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# =============================================================================
+# 系统文件
+# =============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.tmp
+*.temp
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# IDE 和编辑器
+# =============================================================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# =============================================================================
+# 数据库文件
+# =============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# =============================================================================
+# 备份文件
+# =============================================================================
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+
+# =============================================================================
+# 压缩文件
+# =============================================================================
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# =============================================================================
+# 特定于项目的忽略
+# =============================================================================
+# 模型文件 (通常很大)
+*.model
+*.pkl
+*.pickle
+models/
+
+# 数据文件
+data/
+datasets/
+*.csv
+*.json.bak
+
+# 测试文件
+test_*.py
+*_test.py
+test_output/
+
+# 文档生成
+docs/_build/
+docs/build/
+
+# =============================================================================
+# 保留示例文件但忽略实际配置
+# =============================================================================
+# 保留示例配置文件
+!config_example.yaml
+!config_example.yml
+!.env.example
+!mcp_setting_example.json

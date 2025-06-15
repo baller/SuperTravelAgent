@@ -22,7 +22,7 @@ class Logger:
         os.makedirs(log_dir, exist_ok=True)
         
         # Create logger
-        self.logger = logging.getLogger('sage')
+        self.logger = logging.getLogger('SuperTravelAgent')
         self.logger.setLevel(logging.DEBUG)
         self.logger.propagate = False
         
@@ -37,7 +37,7 @@ class Logger:
         console_handler.setFormatter(console_format)
         
         # File handler (rotating)
-        log_file = os.path.join(log_dir, f'sage_{datetime.now().strftime("%Y%m%d")}.log')
+        log_file = os.path.join(log_dir, f'SuperTravelAgent_{datetime.now().strftime("%Y%m%d")}.log')
         file_handler = RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=5)
         file_handler.setLevel(logging.DEBUG)
         file_format = logging.Formatter('%(asctime)s - %(levelname)s - [%(caller_filename)s:%(caller_lineno)d] - %(message)s')

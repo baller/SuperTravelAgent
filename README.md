@@ -9,7 +9,7 @@ SuperTravelAgent 是一个多智能体旅游规划智能体，通过无缝衔接
 
 **🌟 核心优势**：
 - **MCP服务矩阵**：集成百度地图、12306火车票、小红书社交内容、实时网络搜索等专业旅游MCP服务器
-- **AI图像处理**：基于[PowerPaint](https://github.com/open-mmlab/PowerPaint)的多功能图像修复MCP，支持旅游照片美化、物体移除、图像扩展等功能
+- **AI图像处理**：基于[PowerPaint](https://github.com/open-mmlab/PowerPaint)的多功能图像修复模型，支持旅游照片美化、物体移除、图像扩展等功能
 - **智能体协作**：六大专业智能体协同工作，为旅游规划提供前所未有的数据支撑和服务能力
 
 ## ✨ 核心亮点
@@ -56,7 +56,7 @@ graph TB
         P --> T[🔍 网络搜索MCP]
         P --> U[📁 文件系统MCP]
         P --> V[🌐 HTTP请求MCP]
-        P --> W1[🎨 PowerPaint图像MCP]
+        P --> W1[🎨 PowerPaint图像编辑]
         
         Q --> Q1[地理编码/逆编码]
         Q --> Q2[POI搜索]
@@ -125,7 +125,7 @@ graph TD
         E --> L[📱 小红书内容MCP]
         E --> M[🔍 实时搜索MCP]
         E --> N[📁 文件管理MCP]
-        E --> O[🎨 PowerPaint图像MCP]
+        E --> O[🎨 PowerPaint图像编辑]
         
         J --> J1[位置搜索 & 路线规划]
         K --> K1[火车票查询 & 预订建议]

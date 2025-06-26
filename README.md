@@ -186,7 +186,7 @@ graph TD
 
 ```bash
 # 克隆项目
-git clone https://github.com/
+git clone https://github.com/baller/SuperTravelAgent.git
 cd SuperTravelAgent
 
 # 安装Python依赖

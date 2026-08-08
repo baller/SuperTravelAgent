@@ -1,0 +1,181 @@
+name: supertravel
+
+x-external-dns: &external-dns
+  - ${DNS_PRIMARY:-223.5.5.5}
+  - ${DNS_SECONDARY:-8.8.8.8}
+
+x-runtime-network: &runtime-network
+  http_proxy: ${CONTAINER_HTTP_PROXY:-}
+  https_proxy: ${CONTAINER_HTTP_PROXY:-}
+  HTTP_PROXY: ${CONTAINER_HTTP_PROXY:-}
+  HTTPS_PROXY: ${CONTAINER_HTTP_PROXY:-}
+  no_proxy: localhost,127.0.0.1,postgres,redis,mcp-baidu,mcp-xhs,mcp-12306,api,web
+  NO_PROXY: localhost,127.0.0.1,postgres,redis,mcp-baidu,mcp-xhs,mcp-12306,api,web
+
+x-host-gateway: &host-gateway
+  - host.docker.internal:host-gateway
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-supertravel}
+      POSTGRES_USER: ${POSTGRES_USER:-supertravel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supertravel}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-supertravel} -d ${POSTGRES_DB:-supertravel}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  mcp-baidu:
+    build:
+      context: .
+      dockerfile: mcp_servers/baidu/Dockerfile
+    environment:
+      BAIDU_MAP_SERVER_AK: ${BAIDU_MAP_SERVER_AK:-}
+      BAIDU_MAP_MAX_QPS: ${BAIDU_MAP_MAX_QPS:-2}
+      MCP_BAIDU_HOST: 0.0.0.0
+      MCP_BAIDU_PORT: 8100
+    dns: *external-dns
+    restart: unless-stopped
+
+  mcp-xhs:
+    build:
+      context: .
+      dockerfile: mcp_servers/xhs/Dockerfile
+    environment:
+      XHS_COOKIE: ${XHS_COOKIE:-}
+      MCP_XHS_HOST: 0.0.0.0
+      MCP_XHS_PORT: 8200
+    dns: *external-dns
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    environment: *runtime-network
+    extra_hosts: *host-gateway
+    dns: *external-dns
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mcp-baidu:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/system/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  agent-worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["arq", "app.workers.agent_worker.AgentWorkerSettings"]
+    env_file: .env
+    environment: *runtime-network
+    extra_hosts: *host-gateway
+    dns: *external-dns
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mcp-baidu:
+        condition: service_started
+    restart: unless-stopped
+
+  agent-recovery-worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["arq", "app.workers.agent_worker.AgentRecoveryWorkerSettings"]
+    env_file: .env
+    environment: *runtime-network
+    extra_hosts: *host-gateway
+    dns: *external-dns
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mcp-baidu:
+        condition: service_started
+    restart: unless-stopped
+
+  watch-worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["arq", "app.workers.watch_worker.WorkerSettings"]
+    env_file: .env
+    environment: *runtime-network
+    extra_hosts: *host-gateway
+    dns: *external-dns
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mcp-baidu:
+        condition: service_started
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mcp-12306:
+    build:
+      context: .
+      dockerfile: mcp_servers/rail/Dockerfile
+    environment:
+      MCP_RAIL_HOST: 0.0.0.0
+      MCP_RAIL_PORT: 8000
+    dns: *external-dns
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,131 @@
+from enum import StrEnum
+
+
+class TripLifecycle(StrEnum):
+    DRAFT = "DRAFT"
+    CLARIFYING = "CLARIFYING"
+    RESEARCHING = "RESEARCHING"
+    PLANNING = "PLANNING"
+    REVIEWING = "REVIEWING"
+    READY = "READY"
+    IN_TRIP = "IN_TRIP"
+    COMPLETED = "COMPLETED"
+    ARCHIVED = "ARCHIVED"
+
+
+class FieldState(StrEnum):
+    CONFIRMED = "CONFIRMED"
+    INFERRED = "INFERRED"
+    ASSUMED = "ASSUMED"
+    MISSING = "MISSING"
+    CONFLICTED = "CONFLICTED"
+
+
+class TripPulse(StrEnum):
+    PREPARING = "准备中"
+    NEEDS_INPUT = "需要补充"
+    AWAITING_REVIEW = "计划待确认"
+    READY = "基本就绪"
+    ATTENTION = "需要关注"
+    BLOCKED = "存在阻断"
+    IN_TRIP = "旅行进行中"
+    COMPLETED = "已完成"
+
+
+class PlanReadinessLevel(StrEnum):
+    """Deterministic readiness levels for progressively useful planning."""
+
+    NOT_READY = "not_ready"
+    ORIENTABLE = "orientable"
+    DRAFTABLE = "draftable"
+    EXECUTABLE = "executable"
+
+
+class ConversationStage(StrEnum):
+    DISCOVERY = "DISCOVERY"
+    BRIEFING = "BRIEFING"
+    PREFERENCE = "PREFERENCE"
+    DIRECTION_REVIEW = "DIRECTION_REVIEW"
+    DRAFT_REVIEW = "DRAFT_REVIEW"
+    FINALIZING = "FINALIZING"
+    PLAN_REVIEW = "PLAN_REVIEW"
+    PLAN_ACTIVE = "PLAN_ACTIVE"
+
+
+class PlanningConsent(StrEnum):
+    NONE = "NONE"
+    DIRECTION_CONFIRMED = "DIRECTION_CONFIRMED"
+    DRAFT_CONFIRMED = "DRAFT_CONFIRMED"
+
+
+class RunStatus(StrEnum):
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    WAITING_USER = "WAITING_USER"
+    PARTIAL = "PARTIAL"
+    SUCCEEDED = "SUCCEEDED"
+    CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
+
+
+class ComponentState(StrEnum):
+    CREATED = "CREATED"
+    PRESENTED = "PRESENTED"
+    SUBMITTED = "SUBMITTED"
+    VALIDATED = "VALIDATED"
+    APPLIED = "APPLIED"
+    SUPERSEDED = "SUPERSEDED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
+
+
+class PatchState(StrEnum):
+    PREVIEW = "PREVIEW"
+    APPLIED = "APPLIED"
+    SUPERSEDED = "SUPERSEDED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    FAILED = "FAILED"
+
+
+class RiskLevel(StrEnum):
+    GREEN = "GREEN"
+    YELLOW = "YELLOW"
+    RED = "RED"
+
+
+class FactState(StrEnum):
+    LIVE = "live"
+    CACHED = "cached"
+    STALE = "stale"
+
+
+class ConstraintKind(StrEnum):
+    HARD = "HARD"
+    SOFT = "SOFT"
+    TEMPORARY = "TEMPORARY"
+    INFERRED = "INFERRED"
+
+
+class Intent(StrEnum):
+    CREATE_TRIP = "CREATE_TRIP"
+    UPDATE_TRIP_SPEC = "UPDATE_TRIP_SPEC"
+    ANSWER_CLARIFICATION = "ANSWER_CLARIFICATION"
+    ADD_REFERENCE_TEXT = "ADD_REFERENCE_TEXT"
+    PLAN_ITINERARY = "PLAN_ITINERARY"
+    ASK_TRIP_QUESTION = "ASK_TRIP_QUESTION"
+    SEARCH_PLACE = "SEARCH_PLACE"
+    SEARCH_HOTEL_AREA = "SEARCH_HOTEL_AREA"
+    SEARCH_RAIL_OPTIONS = "SEARCH_RAIL_OPTIONS"
+    MODIFY_ITINERARY = "MODIFY_ITINERARY"
+    EXPLAIN_PLAN = "EXPLAIN_PLAN"
+    HANDLE_DECISION = "HANDLE_DECISION"
+    REPLAN_REMAINING_DAY = "REPLAN_REMAINING_DAY"
+    COMPLETE_ITEM = "COMPLETE_ITEM"
+    SKIP_ITEM = "SKIP_ITEM"
+    DELAY_ITEM = "DELAY_ITEM"
+    UNDO_VERSION = "UNDO_VERSION"
+    CANCEL_RUN = "CANCEL_RUN"
+    GENERAL_CHAT = "GENERAL_CHAT"
+    UNSUPPORTED = "UNSUPPORTED"

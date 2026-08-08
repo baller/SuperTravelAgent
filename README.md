@@ -1,454 +1,178 @@
+# SuperTravel
 
-# 🚀 SuperTravelAgent 旅游规划智能体
+SuperTravel 是围绕一段 Trip 持续工作的 AI 旅行管家。用户通过一个 Agent 交代目的、约束和变化；系统维护结构化 Trip State，使用真实百度地图地点、路线和天气，所有高影响修改都通过可预览、可确认、可撤销的 PlanPatch 完成。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-brightgreen.svg)](https://python.org)[![Version](https://img.shields.io/badge/Version-1.0-green.svg)](https://github.com/ZHangZHengEric/SuperTravelAgent)
+每段 Trip 可以拥有多个相互隔离的 Conversation Thread：消息、交互组件、Agent Run 与检查点都绑定明确的 `thread_id`。工作台支持新建、切换、重命名、归档和删除对话，并以可折叠的“管家工作过程”展示正在解决的问题、真实工具结果与可点击来源；隐藏推理、提示词和底层请求结构不会进入前端协议。
 
+这不是多 Agent 展示，也不会在缺少 Key 或供应商失败时回退到模拟地点、虚构坐标、假天气或假房价。
 
+## MVP 已实现
 
-SuperTravelAgent 是一个多智能体旅游规划智能体，通过无缝衔接的智能体协作，智能地将复杂的旅游需求分解为可管理的规划任务。集成了业界最完整的旅游MCP服务器生态系统和先进的AI图像处理能力。
+- 由模型动态决定询问、研究、调用工具、提出 Patch 或回答的 Agent Loop，而非固定字段工作流；
+- 文字创建 Trip，以及目的地、日期、同行人、预算、节奏/兴趣对话组件；
+- LangGraph 持久检查点与 `interrupt`/resume，同一 Run 中断后可恢复；
+- PostgreSQL Trip State、计划版本、Patch、事实、Watch、Decision、消息、组件和事件；
+- 多对话 Thread 隔离、历史切换、重命名/归档/删除，以及按 Run 分组的消息与组件；
+- 百度地图 Streamable HTTP MCP 适配器：地点、地理编码、酒店 POI、市内路线、天气；
+- 真实地点候选、按天时间线、RouteLeg、地图联动与酒店位置便利度；
+- 自然语言局部移动、删除、替换、加休息；真实替换地点会再次调用百度地图；
+- 锁定/已预约/已完成项目保护，Patch 审批、拒绝、乐观锁和版本恢复；
+- ARQ 天气 Watch、FactSnapshot、应用内 Decision Queue；
+- Today Mode：当前/下一项、真实交通、天气、完成、跳过、延迟和余程重排入口；
+- Serper 公开网页搜索与受控网页读取，来源独立持久化为 `SourceRecord`；
+- `Joooook/12306-mcp@0.3.9` 只读查询适配层，默认启用且不影响核心城市规划；
+- `jobsonlook/xhs-mcp` 小红书只读攻略研究适配层，配置 Cookie 后启用；
+- SSE 持久事件与 `Last-Event-ID` 重连；
+- Docker Compose 一键启动和服务就绪检查。
 
-**🌟 核心优势**：
-- **MCP服务矩阵**：集成百度地图、12306火车票、小红书社交内容、实时网络搜索等专业旅游MCP服务器
-- **AI图像处理**：基于[PowerPaint](https://github.com/open-mmlab/PowerPaint)的多功能图像修复模型，支持旅游照片美化、物体移除、图像扩展等功能
-- **智能体协作**：六大专业智能体协同工作，为旅游规划提供前所未有的数据支撑和服务能力
+## 真实数据边界
 
-## ✨ 核心亮点
+| 能力 | 数据源 | 失败行为 |
+|---|---|---|
+| 基础地图瓦片 | OpenStreetMap，CARTO 自动备用 | 百度浏览器端 AK 不可用也保留可操作底图 |
+| 地点、BD-09 坐标、酒店地点 | 百度地图开放平台 MCP | 不生成地点；真实点位转换后叠加到底图 |
+| 步行、公交、驾车路线 | 百度地图开放平台 MCP | 产生 `ROUTE_MISSING` 阻断，Trip 不进入 READY |
+| 天气与天气 Watch | 百度地图开放平台 MCP | 标记检查失败，保留上次事实，不改行程 |
+| 旅行意图、排程、Patch 语义 | OpenAI-compatible LLM | Run 失败并保留已提交 Trip State |
+| 火车查询 | 可选社区 12306 MCP | 回退为用户文字录入，不影响核心规划 |
+| 攻略研究 | 可选 jobsonlook/xhs-mcp 只读工具 | 未配置 Cookie 时明确显示未启用，不伪造社区内容 |
+| 公开网页研究 | 可选 Serper + 受控网页读取 | 未配置 Serper Key 时不声称已完成网页搜索 |
+| 酒店 | 百度酒店 POI + 到每日首末地点的真实路线 | 不展示房价、房量、取消政策或预订按钮 |
 
-🧠 **智能旅程规划** - 自动将复杂旅游需求分解为可管理的任务，支持行程依赖关系跟踪  
-🔄 **六大智能体协作** - 专业旅游智能体间的无缝协调，具备强大的错误处理机制  
-🛠️ **强大MCP服务矩阵** - 业界最完整的旅游MCP服务器生态系统  
-🎨 **AI图像处理** - 集成PowerPaint多功能图像修复，支持旅游照片美化处理
-🌐 **现代化Web界面** - React + TypeScript前端，FastAPI后端，实时WebSocket通信   
-⚙️ **丰富配置系统** - 环境变量、配置文件、多模型支持和热重载
+费用只接受用户录入、API 明确返回或可解释规则估算；未知费用保持 `unknown`。
 
-## 📸 产品展示
+## 快速启动
 
-### 🏠 主界面总览
-![主界面展示](asserts/index.png)
-*现代化的Web界面，集成多智能体协作和MCP服务器管理*
-
-
-### 📋 详细功能展示
-![功能详情展示](asserts/details.png)
-*完整的旅游规划功能展示，包括地图集成、行程规划和实时信息查询*  
-
-### 💭 智能对话界面
-![思考过程展示](asserts/thinging.png)
-*展示智能体的思考和推理过程，让旅游规划过程透明可见*
-
-
-
-
-
-## 🏗️ 架构概览
-
-SuperTravelAgent 采用现代化多智能体协作架构，结合了强大的后端服务和业界最完整的旅游工具生态系统：
-
-```mermaid
-graph TD
-    subgraph "🌐 前端层"
-        A[React + TypeScript 界面]
-        B[Ant Design UI组件]
-        C[WebSocket实时通信]
-        D[智能体状态可视化]
-        A --> B
-        B --> C
-        C --> D
-    end
-    
-    subgraph "⚡ 服务层"
-        E[REST API接口]
-        F[WebSocket管理器]
-        G[配置管理系统]
-        H[会话管理]
-        E --> F
-        F --> G
-        G --> H
-    end
-    
-    subgraph "🤖 智能体层"
-        I[智能体控制器]
-        subgraph "智能体矩阵"
-            J[任务分析智能体]
-            K[任务分解智能体]
-            L[规划智能体]
-            M[执行智能体]
-            N[观察智能体]
-            O[总结智能体]
-        end
-        I --> J
-        I --> K
-        I --> L
-        I --> M
-        I --> N
-        I --> O
-    end
-    
-    subgraph "🛠️ MCP服务层"
-        P[MCP管理器]
-        subgraph "地图服务"
-            Q[🗺️ 百度地图MCP]
-            Q1[地理编码]
-            Q2[POI搜索]
-            Q --> Q1
-            Q --> Q2
-        end
-        subgraph "交通服务"
-            R[🚄 12306火车票MCP]
-            R1[列车时刻表]
-            R2[余票查询]
-            R --> R1
-            R --> R2
-        end
-        subgraph "内容服务"
-            S[📱 小红书MCP]
-            T[🔍 网络搜索MCP]
-            S1[旅游笔记]
-            T1[实时搜索]
-            S --> S1
-            T --> T1
-        end
-        subgraph "工具服务"
-            U[📁 文件系统MCP]
-            V[🌐 HTTP请求MCP]
-            W1[🎨 PowerPaint图像编辑]
-            W11[图像修复]
-            W12[物体编辑]
-            W1 --> W11
-            W1 --> W12
-        end
-        P --> Q
-        P --> R
-        P --> S
-        P --> T
-        P --> U
-        P --> V
-        P --> W1
-    end
-    
-    A --> E
-    E --> I
-    I --> P
-    M --> P
-    
-    style A fill:#e1f5fe
-    style I fill:#fff3e0
-    style P fill:#f3e5f5
-    style Q fill:#e8f5e8
-    style R fill:#fff3e0
-    style S fill:#ffebee
-    style T fill:#f3e5f5
-```
-
-### 🔄 智能体工作流程
-
-```mermaid
-graph TD
-    A[🔍 用户旅游需求] --> B[📋 任务分析智能体]
-    B --> C[🎯 任务分解智能体]
-    C --> D[📝 规划智能体]
-    D --> E[⚡ 执行智能体]
-    E --> F[👁️ 观察智能体]
-    F --> G{任务完成?}
-    G -->|否| D
-    G -->|是| H[📄 总结智能体]
-    H --> I[🎉 旅游方案输出]
-    
-    subgraph "🛠️ 专业旅游MCP服务矩阵"
-        E --> J[🗺️ 百度地图MCP]
-        E --> K[🚄 12306火车票MCP]
-        E --> L[📱 小红书内容MCP]
-        E --> M[🔍 实时搜索MCP]
-        E --> N[📁 文件管理MCP]
-        E --> O[🎨 PowerPaint图像编辑]
-        
-        J --> J1[位置搜索 & 路线规划]
-        K --> K1[火车票查询 & 预订建议]
-        L --> L1[旅游攻略 & 用户评价]
-        M --> M1[实时信息 & 价格对比]
-        N --> N1[行程保存 & 文档管理]
-        O --> O1[旅游照片美化 & 修复]
-    end
-    
-    style A fill:#e1f5fe
-    style I fill:#e8f5e8
-    style B fill:#fff3e0
-    style E fill:#f3e5f5
-    style J fill:#e8f5e8
-    style K fill:#fff3e0
-    style L fill:#ffebee
-    style M fill:#f3e5f5
-```
-
-## 🚀 快速开始
-
-### 📦 安装
+要求 Docker Engine / Docker Desktop 与 Compose v2。
 
 ```bash
-# 克隆项目
-git clone https://github.com/baller/SuperTravelAgent.git
-cd SuperTravelAgent
+cp .env.example .env
+```
 
-# 安装Python依赖
-pip install -r requirements.txt
+在 `.env` 中至少填写：
 
-# 安装前端依赖
-cd frontend
-npm install
+```dotenv
+LLM_API_KEY=...
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-v4-pro
+LLM_MAX_TOKENS=8192
+LLM_STRUCTURED_RETRIES=1
+MAX_AGENT_ITERATIONS=12
 
-# 启动前端
+BAIDU_MAP_SERVER_AK=...
+BAIDU_MAP_MAX_QPS=2
+
+# 可选：公开网页研究
+SERPER_API_KEY=
+
+# 仅当容器需要通过宿主机代理访问外部服务时填写
+CONTAINER_HTTP_PROXY=
+```
+
+`BAIDU_MAP_SERVER_AK` 使用百度开放平台服务端类型 AK，供 MCP 调用地点、路线和天气 Web API。前端基础底图使用 OpenStreetMap 主瓦片与 CARTO 备用瓦片，不再依赖百度浏览器端 AK；百度返回的 BD-09 坐标只在显示层转换后叠加。
+`BAIDU_MAP_MAX_QPS` 默认设为 `2`，由百度 MCP 对地点、路线与天气请求统一平滑限流，并配合 API 结果缓存避免短时间突发调用。
+服务端 AK 应按部署出口 IP 或百度平台支持的安全方式限制调用来源。
+
+启动：
+
+```bash
+docker compose up --build
+```
+
+当前 Agent 主链路不加载 Skill、RAG 或向量模型。若容器依赖代理访问 DeepSeek、Serper 等外部服务，可将 `CONTAINER_HTTP_PROXY` 设置为 Docker 可访问的代理地址；Docker Desktop 通常使用 `http://host.docker.internal:<端口>`。
+
+打开 [http://localhost:8080](http://localhost:8080)。就绪状态会明确显示 PostgreSQL、Redis、LLM、百度地图、12306 与小红书；核心项未就绪时创建按钮会禁用。
+
+12306 只读查询默认启用；如需关闭，在 `.env` 写入 `ENABLE_12306_MCP=false`。该适配层每次查询通过 stdio 隔离调用固定版本的社区 MCP，不登录、不下单、不抢票，结果始终标记为社区数据源。
+
+启用小红书只读攻略研究：
+
+```bash
+# .env
+ENABLE_XHS_MCP=true
+XHS_COOKIE=你自己的有效小红书 Cookie
+
+docker compose up -d --build mcp-xhs api worker
+```
+
+Cookie 只保存在被 Git 忽略的本地 `.env` 中。适配层仅开放 Cookie 检查、笔记搜索和笔记读取，不开放发布、评论或其他写操作。Cookie 无效时就绪状态会明确报错，不回退到模拟攻略。
+
+## 本地开发
+
+后端使用 Python 3.12：
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -e 'apps/api[dev]'
+
+PYTHONPATH=apps/api uvicorn app.main:app --reload --port 8000
+```
+
+前端：
+
+```bash
+cd apps/web
+npm ci
 npm run dev
-
-# 启动后端
-cd backend
-python main.py
 ```
 
-然后在浏览器中访问 `http://localhost:8080` 体验SuperTravelAgent旅游规划智能体。
+本地 API 仍需要 PostgreSQL、Redis、mcp-baidu 和环境变量；推荐开发时也由 Compose 启动依赖。
 
-#### ⚙️ 配置API密钥
+## 验证
 
+```bash
+.venv/bin/ruff check apps/api/app apps/api/tests mcp_servers/baidu mcp_servers/rail mcp_servers/xhs
+PYTHONPATH=. .venv/bin/pytest -q apps/api/tests
 
-**DeepSeek (推荐)**
-```
-API密钥: your-deepseek-api-key
-模型: deepseek-chat
-API地址: https://api.deepseek.com/v1
-```
-
-**OpenRouter (多模型访问)**
-```
-API密钥: your-openrouter-api-key
-模型: deepseek/deepseek-chat
-API地址: https://openrouter.ai/api/v1
+cd apps/web
+npm run type-check
+npm run build
 ```
 
-**OpenAI**
-```
-API密钥: your-openai-api-key
-模型: gpt-4o
-API地址: https://api.openai.com/v1
-```
+填好真实 Key 后运行 31 条 Agent 路由/抽取评测：
 
-## 🎯 核心功能
-
-### 🤖 **六大智能体协作系统**
-
-#### 1. 任务分析智能体 (TaskAnalysisAgent)
-- **深度需求理解**: 分析用户旅游需求的细节和偏好
-- **上下文提取**: 识别预算、时间、目的地、兴趣点等关键信息
-- **统一系统提示管理**: 为后续智能体提供一致的上下文理解
-
-#### 2. 任务分解智能体 (TaskDecomposeAgent)
-- **智能任务分解**: 将复杂旅游规划分解为可管理的子任务
-- **依赖关系分析**: 识别任务间的逻辑依赖和执行顺序
-- **并行规划支持**: 支持同时进行多个独立任务的规划
-
-#### 3. 规划智能体 (PlanningAgent)
-- **战略性行程设计**: 基于分解任务制定详细的执行计划
-- **资源优化**: 最优工具选择和资源分配
-- **风险评估**: 识别潜在问题并制定备选方案
-
-#### 4. 执行智能体 (ExecutorAgent)
-- **智能工具调用**: 自动选择和使用合适的工具完成任务
-- **错误恢复机制**: 自动处理工具执行失败和异常情况
-- **并行处理**: 支持同时执行多个独立的工具调用
-
-#### 5. 观察智能体 (ObservationAgent)
-- **进度监控**: 实时跟踪任务执行进度和状态
-- **质量评估**: 评估执行结果的完整性和质量
-- **完成度检测**: 智能判断任务是否达到预期目标
-
-#### 6. 总结智能体 (TaskSummaryAgent)
-- **结果综合**: 将所有执行结果整合为完整的旅游方案
-- **结构化输出**: 生成清晰、可操作的旅游建议
-- **价值提炼**: 提取关键信息和实用建议
-
-### 🛠️ **强大的旅游工具生态系统**
-
-SuperTravelAgent 集成了强大的专业旅游工具生态系统，通过Model Context Protocol (MCP) 提供无缝的服务集成：
-
-#### 🗺️ **百度地图MCP**
-```
-🌟 核心能力: 中国最权威的地图和位置服务
-```
-- **地理编码服务**: 地址转坐标、坐标转地址，支持模糊匹配
-- **POI搜索**: 周边景点、餐厅、酒店、交通站点智能搜索
-- **路线规划**: 多种出行方式（步行、驾车、公交）最优路线计算
-- **周边探索**: 基于位置的周边服务发现和推荐
-- **距离计算**: 精确的距离和时间估算
-
-
-#### 🚄 **12306火车票MCP**
-```
-🌟 核心能力: 中国铁路官方数据，最准确的火车票信息
-```
-- **列车时刻表查询**: 实时列车班次、时间、价格信息
-- **余票实时查询**: 各车次座位余票情况动态监控
-- **中转搜索**: 智能中转方案推荐和优化
-- **过站信息**: 列车途经站点详细信息
-- **车次筛选**: 根据时间、价格、车型智能筛选
-
-
-#### 📱 **小红书社交内容MCP**
-```
-🌟 核心能力: 最丰富的用户原创旅游内容和真实体验分享
-```
-- **旅游笔记搜索**: 基于目的地的用户旅游经验和攻略
-- **热门景点发现**: 社交平台热门打卡地和网红景点
-- **用户评价分析**: 真实用户体验和评价数据挖掘
-- **旅游趋势洞察**: 最新旅游趋势和热门目的地发现
-- **内容筛选**: 高质量旅游内容智能筛选和推荐
-
-
-#### 🔍 **Serper网络搜索MCP**
-```
-🌟 核心能力: 实时网络信息搜索和数据聚合
-```
-- **实时信息搜索**: 最新的旅游资讯、政策、天气等信息
-- **价格信息聚合**: 机票、酒店、门票价格对比
-- **新闻资讯获取**: 目的地最新动态和重要信息
-- **多源信息整合**: 整合多个信息源的综合搜索结果
-
-#### 📁 **文件系统管理MCP**
-```
-🌟 核心能力: 旅游规划结果的持久化存储和管理
-```
-- **行程文档保存**: 自动保存生成的旅游规划文档
-- **多格式支持**: 支持JSON、Markdown等多种格式
-- **版本管理**: 旅游计划的版本控制和历史记录
-- **文件共享**: 生成可分享的旅游计划链接
-
-#### 🌐 **HTTP请求服务 (Fetch MCP)**
-```
-🌟 核心能力: 灵活的HTTP请求能力，支持各种API调用
-```
-- **API集成**: 与第三方旅游服务API无缝集成
-- **数据获取**: 从各种在线服务获取实时数据
-- **内容抓取**: 智能网页内容提取和分析
-
-#### 🎨 **PowerPaint图像处理**
-```
-🌟 核心能力: 基于ECCV 2024论文的多功能图像修复模型，专为旅游照片处理优化
-```
-- **智能图像修复**: 自动修复旅游照片中的瑕疵和不完美区域
-- **物体移除**: 智能移除照片中不需要的人物、标志或干扰元素
-- **物体添加**: 基于文本描述在指定位置添加新的物体或元素
-- **图像扩展**: 智能扩展照片边界，创造更大视野的旅游照片
-- **形状引导生成**: 根据指定形状和描述生成新的图像内容
-- **旅游场景优化**: 专门针对风景照、人像照、建筑照的智能美化
-
-**PowerPaint技术特点**：
-- **一模型多任务**: 单一模型支持文本引导修复、物体移除、图像扩展、形状控制等多种功能
-- **高质量输出**: 基于Stable Diffusion架构，确保生成图像的自然度和一致性
-- **任务提示学习**: 创新的任务提示机制，无需重新训练即可适应不同图像处理需求
-- **实时处理**: 优化的推理流程，支持旅游照片的快速批量处理
-
-**旅游应用场景**：
-- 移除旅游照片中的游客或杂物，获得完美的风景照
-- 扩展照片边界，展现更完整的景观视野
-- 智能修复因天气或拍摄条件导致的照片瑕疵
-- 为旅游攻略创建更吸引人的示意图和说明图片
-
-> 📚 **学术支持**: 基于论文 "A Task is Worth One Word: Learning with Task Prompts for High-Quality Versatile Image Inpainting" (ECCV 2024)  
-> 🔗 **项目地址**: [PowerPaint GitHub](https://github.com/open-mmlab/PowerPaint)
-
-### 🎨 **工具协作示例**
-
-以下是各个专业工具如何协作完成复杂旅游规划任务的示例：
-
-```python
-# 用户询问: "帮我规划一次北京到上海的3天商务旅行，并美化我的旅游照片"
-# 
-# 六大智能体 + MCP服务器协作流程:
-# 1. 📋 任务分析智能体 - 理解需求: 商务旅行、3天、北京到上海、照片处理
-# 2. 🎯 任务分解智能体 - 分解任务: 交通、住宿、行程、预算、图像处理
-# 3. 📝 规划智能体 - 制定计划: 调用多个MCP服务器
-#    - 🗺️  百度地图MCP: 查询北京/上海重要商务区位置
-#    - 🚄 12306火车票MCP: 查询北京到上海的高铁班次
-#    - 📱 小红书MCP: 搜索上海商务酒店推荐和旅游攻略
-#    - 🔍 网络搜索MCP: 查询上海天气和商务活动信息
-#    - 🎨 PowerPaint: 准备照片美化和处理服务
-# 4. ⚡ 执行智能体 - 并行执行: 同时调用各个MCP服务器
-# 5. 👁️  观察智能体 - 监控质量: 确保信息完整性和准确性
-# 6. 📄 总结智能体 - 生成方案: 整合所有信息生成完整旅行计划和照片处理指南
+```bash
+PYTHONPATH=apps/api .venv/bin/python -m app.evals.runner
 ```
 
+评测低于 90% 会返回非零退出码。场景位于 `packages/evals/agent_scenarios.json`。
 
-## 📁 项目结构
+完整 Compose 已启动且真实 Key 就绪后，运行端到端真链路（建 Trip → 组件中断/恢复 → 真实规划 → 版本提交 → SSE 重放）：
 
-```
-SuperTravelAgent/
-├── 📁 agents/                  # 智能体核心模块
-│   ├── 📁 agent/              # 智能体实现
-│   │   ├── agent_controller.py    # 智能体控制器
-│   │   ├── agent_base.py          # 智能体基类
-│   │   ├── task_analysis_agent/   # 任务分析智能体
-│   │   ├── task_decompose_agent/  # 任务分解智能体
-│   │   ├── planning_agent/        # 规划智能体
-│   │   ├── executor_agent/        # 执行智能体
-│   │   ├── observation_agent/     # 观察智能体
-│   │   └── task_summary_agent/    # 总结智能体
-│   ├── 📁 tool/               # 工具系统
-│   │   ├── tool_manager.py        # 工具管理器
-│   │   └── tool_base.py          # 工具基类
-│   ├── 📁 config/             # 配置管理
-│   └── 📁 utils/              # 工具函数
-├── 📁 backend/                # FastAPI后端
-│   ├── main.py                # 主服务器文件
-│   ├── config.yaml           # 后端配置
-│   └── config_loader.py      # 配置加载器
-├── 📁 frontend/               # React前端
-│   ├── 📁 src/
-│   │   ├── App.tsx           # 主应用组件
-│   │   ├── 📁 components/    # UI组件
-│   │   ├── 📁 hooks/         # React Hooks
-│   │   └── 📁 utils/         # 前端工具
-│   ├── package.json          # 前端依赖
-│   └── vite.config.ts        # Vite配置
-├── 📁 mcp_servers/            # MCP服务器生态系统
-│   ├── mcp_setting.json      # MCP服务器配置文件
-│   ├── 📁 xhs-mcp/           # 小红书内容MCP服务器
-│   ├── 📁 serper-web-search-mcp/  # 网络搜索MCP服务器
-├── 📁 outputs/                # 输出结果目录
-└── requirements.txt           # Python依赖
+```bash
+SUPERTRAVEL_E2E_BASE_URL=http://localhost:8080 \
+  PYTHONPATH=apps/api:. .venv/bin/pytest -q \
+  apps/api/tests/integration/test_real_chain.py
 ```
 
+未设置 `SUPERTRAVEL_E2E_BASE_URL` 时，该真 Key 测试会明确跳过，不会改用模拟供应商数据。
 
+## 项目结构
 
-### REST API
-启动后端后，访问 `http://localhost:8000/docs` 查看完整的API文档。
+```text
+apps/
+├── api/app/
+│   ├── agent/          # 7 节点 LangGraph 外壳与动态 Agent Loop
+│   ├── api/            # Trip、Run、组件、Patch、SSE API
+│   ├── domain/         # Trip State 与前后端契约
+│   ├── services/       # 规划、校验、Patch、来源、事件、执行动作
+│   ├── tools/          # MCP + Serper/Web Tool Gateway
+│   └── workers/        # Watch 调度与 Decision 生成
+└── web/src/            # Home、Agent Thread、时间线、百度地图、Today
+mcp_servers/
+├── baidu/              # 百度地图 MCP 适配器
+├── rail/               # 固定版本的只读社区 12306 适配层
+└── xhs/                # 可选的小红书只读攻略研究适配层
+packages/evals/         # 30 条 Agent 场景
+infra/nginx/            # Web 与 SSE 反向代理
+docker-compose.yml
+```
 
+旧版 `agents/`、`backend/`、`frontend/` 保留为迁移参考，不参与新 Compose 的运行链路；正式 MVP 入口只使用 `apps/`。
 
+更完整的领域边界、业务流程和失败语义见 [MVP 架构说明](docs/MVP_ARCHITECTURE.md)。视觉规范见 [DESIGN.md](DESIGN.md)。
 
+## 当前不做
 
-## 🙏 致谢
-
-感谢以下项目和服务为SuperTravelAgent提供的支持：
-
-### 🛠️ **MCP服务器生态系统**
-- **百度地图MCP** - 提供权威的中国地理位置和导航服务
-- **12306火车票MCP** - 提供官方中国铁路数据支持
-- **小红书MCP** - 提供丰富的旅游社交内容和用户体验
-- **Serper搜索MCP** - 提供实时网络搜索和信息聚合服务
-- **文件系统MCP** - 提供可靠的文档存储和管理功能
-
-### 🎨 **AI图像处理**
-- **[PowerPaint](https://github.com/open-mmlab/PowerPaint)** - 基于ECCV 2024论文的多功能图像修复模型
-  - 论文: "A Task is Worth One Word: Learning with Task Prompts for High-Quality Versatile Image Inpainting"
-  - 作者: Junhao Zhuang, Yanhong Zeng, Wenran Liu, Chun Yuan, Kai Chen
-  - 为SuperTravelAgent提供强大的旅游照片处理和美化能力
-
-### 🤖 **AI模型与框架**
-- **OpenAI & DeepSeek** - 提供强大的大语言模型支持
-- **Model Context Protocol (MCP)** - 提供标准化的AI工具集成协议
-- **Sage Framework** - 提供多智能体协作框架支持 [GitHub](https://github.com/ZHangZHengEric/Sage)
-
-### 💻 **技术框架**
-- **FastAPI** - 提供高性能的异步Web框架
-- **React + TypeScript** - 提供现代化的前端开发框架
-- **Ant Design** - 提供专业的UI组件库
-- **WebSocket** - 提供实时通信能力
----
-
-**SuperTravelAgent** - 强大的智能旅游规划专家 ✈️🌍
+图片/链接输入、酒店房价和预订、支付/退款、邮件或系统推送、账号登录、多人协作、社区内容、Review、PDF/Markdown 导出，以及多个对用户可见的 Agent，不属于本次 MVP。

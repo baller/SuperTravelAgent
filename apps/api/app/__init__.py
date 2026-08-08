@@ -1,0 +1,2 @@
+"""SuperTravel application package."""
+
